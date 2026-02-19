@@ -221,7 +221,10 @@ def verify_signed_audit_log(log_path: Path, signing_key: str) -> dict[str, Any]:
         raise GCCError(
             ErrorCode.INVALID_INPUT,
             "Audit signing key is required for verification.",
-            "Set --signing-key or GCC_MCP_AUDIT_SIGNING_KEY.",
+            (
+                "Set --signing-key, --signing-key-file, GCC_MCP_AUDIT_SIGNING_KEY, "
+                "or GCC_MCP_AUDIT_SIGNING_KEY_FILE."
+            ),
         )
 
     try:
