@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import http.client
 import hmac
 import json
 import logging
 import time
 from typing import Any
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.parse import urlencode, urlparse
 
 from mcp.server.auth.provider import AccessToken
 from starlette.responses import JSONResponse
@@ -52,13 +52,18 @@ class OAuth2IntrospectionTokenVerifier:
         introspection_url: str,
         timeout_seconds: float = 5.0,
         client_id: str = "",
-        client_secret: str = "",
+        client_secret: str | None = None,
         required_scopes: list[str] | None = None,
     ) -> None:
+        parsed = _parse_introspection_url(introspection_url)
         self._introspection_url = introspection_url
+        self._introspection_scheme = parsed.scheme
+        self._introspection_host = parsed.hostname or ""
+        self._introspection_port = parsed.port
+        self._introspection_target = _build_request_target(parsed)
         self._timeout_seconds = timeout_seconds
         self._client_id = client_id
-        self._client_secret = client_secret
+        self._client_secret = client_secret or ""
         self._required_scopes = required_scopes or []
 
     async def verify_token(self, token: str) -> AccessToken | None:
@@ -93,28 +98,48 @@ class OAuth2IntrospectionTokenVerifier:
         )
 
     def _introspect(self, token: str) -> dict[str, Any]:
-        body = urlencode({"token": token, "token_type_hint": "access_token"}).encode("utf-8")
-        request = Request(
-            self._introspection_url,
-            data=body,
-            method="POST",
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Accept": "application/json",
-            },
-        )
+        body = urlencode({"token": token}).encode("utf-8")
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        }
         if self._client_id and self._client_secret:
             client_creds = f"{self._client_id}:{self._client_secret}".encode("utf-8")
-            request.add_header(
-                "Authorization",
-                f"Basic {base64.b64encode(client_creds).decode('ascii')}",
-            )
+            headers["Authorization"] = f"Basic {base64.b64encode(client_creds).decode('ascii')}"
 
-        with urlopen(request, timeout=self._timeout_seconds) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        response_bytes = self._post_form(body=body, headers=headers)
+        payload = json.loads(response_bytes.decode("utf-8"))
         if isinstance(payload, dict):
             return payload
         return {}
+
+    def _post_form(self, body: bytes, headers: dict[str, str]) -> bytes:
+        connection_class = (
+            http.client.HTTPSConnection
+            if self._introspection_scheme == "https"
+            else http.client.HTTPConnection
+        )
+        connection = connection_class(
+            host=self._introspection_host,
+            port=self._introspection_port,
+            timeout=self._timeout_seconds,
+        )
+        try:
+            connection.request(
+                method="POST",
+                url=self._introspection_target,
+                body=body,
+                headers=headers,
+            )
+            response = connection.getresponse()
+            response_bytes = response.read()
+            if response.status >= 400:
+                raise ValueError(
+                    f"Introspection endpoint returned HTTP {response.status}."
+                )
+            return response_bytes
+        finally:
+            connection.close()
 
 
 class TrustedProxyHeaderMiddleware:
@@ -206,3 +231,23 @@ def _extract_resource(payload: dict[str, Any]) -> str | None:
             if normalized:
                 return normalized
     return None
+
+
+def _parse_introspection_url(url: str):
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("introspection_url must use http or https.")
+    if not parsed.hostname:
+        raise ValueError("introspection_url must include a hostname.")
+    if parsed.username or parsed.password:
+        raise ValueError("introspection_url must not contain embedded credentials.")
+    if parsed.fragment:
+        raise ValueError("introspection_url must not contain a fragment.")
+    return parsed
+
+
+def _build_request_target(parsed_url) -> str:
+    target = parsed_url.path or "/"
+    if parsed_url.query:
+        target = f"{target}?{parsed_url.query}"
+    return target
