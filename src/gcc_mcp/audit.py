@@ -170,16 +170,42 @@ def _truncate_string(value: str, max_chars: int) -> str:
 
 
 def _read_last_event_hash(path: Path) -> str | None:
+    chunk_size = 16 * 1024
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        with path.open("rb") as handle:
+            handle.seek(0, 2)
+            position = handle.tell()
+            if position == 0:
+                return None
+
+            tail = b""
+            while position > 0:
+                read_size = min(chunk_size, position)
+                position -= read_size
+                handle.seek(position)
+                tail = handle.read(read_size) + tail
+
+                stripped_tail = tail.rstrip(b"\r\n")
+                if b"\n" in stripped_tail or position == 0:
+                    break
     except OSError:
         return None
-    if not lines:
+
+    stripped_tail = tail.rstrip(b"\r\n")
+    if not stripped_tail:
         return None
+
+    last_newline_index = stripped_tail.rfind(b"\n")
+    if last_newline_index >= 0:
+        last_line = stripped_tail[last_newline_index + 1 :]
+    else:
+        last_line = stripped_tail
+
     try:
-        payload = json.loads(lines[-1])
-    except json.JSONDecodeError:
+        payload = json.loads(last_line.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
         return None
+
     event_hash = payload.get("event_sha256")
     if isinstance(event_hash, str) and event_hash:
         return event_hash

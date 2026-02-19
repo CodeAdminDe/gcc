@@ -77,9 +77,9 @@ gcc-mcp
 
 Strict profile behavior for `streamable-http`:
 
-- `auth-mode` must not be `off`.
-- `audit-log-file` must be configured.
-- `audit-signing-key` must be configured.
+- Set `auth-mode` to a non-`off` value.
+- Configure `audit-log-file`.
+- Provide `audit-signing-key`.
 
 ## Envoy Reverse-Proxy Profile
 

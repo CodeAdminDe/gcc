@@ -211,3 +211,41 @@ def test_audit_logger_recovers_previous_hash_from_existing_log(tmp_path: Path) -
 
     last_event = json.loads(log_path.read_text(encoding="utf-8").splitlines()[-1])
     assert last_event["prev_event_sha256"] == previous_hash
+
+
+def test_audit_logger_recovers_last_hash_from_large_existing_log(tmp_path: Path) -> None:
+    log_path = tmp_path / "audit.jsonl"
+    entries: list[str] = []
+    for index in range(300):
+        entries.append(
+            json.dumps(
+                {
+                    "timestamp": "2026-01-01T00:00:00+00:00",
+                    "event_type": "mcp_tool_call",
+                    "tool_name": "gcc_status",
+                    "status": "success",
+                    "request": {},
+                    "response": {},
+                    "prev_event_sha256": None if index == 0 else f"{index - 1:064x}",
+                    "event_sha256": f"{index:064x}",
+                    "event_signature_hmac_sha256": "f" * 64,
+                },
+                sort_keys=True,
+            )
+        )
+    log_path.write_text("\n".join(entries) + "\n", encoding="utf-8")
+
+    logger = AuditLogger(
+        log_path=log_path,
+        redact_sensitive=False,
+        signing_key="unit-test-signing-key",
+    )
+    logger.log_tool_event(
+        tool_name="gcc_context",
+        status="success",
+        request_payload={"level": "summary"},
+        response_payload={"status": "success"},
+    )
+
+    last_event = json.loads(log_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert last_event["prev_event_sha256"] == f"{299:064x}"
