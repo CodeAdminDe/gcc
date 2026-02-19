@@ -187,3 +187,59 @@ def test_cli_parity_commands(tmp_path: Path, capsys) -> None:
         capsys,
     )
     assert delete_result["payload"]["status"] == "success"
+
+
+def test_cli_log_invalid_since_rejected(tmp_path: Path, capsys) -> None:
+    _run_cli_json(
+        [
+            "init",
+            "--directory",
+            str(tmp_path),
+            "--name",
+            "CLI Project",
+        ],
+        capsys,
+    )
+    _run_cli_json(
+        [
+            "commit",
+            "--directory",
+            str(tmp_path),
+            "--message",
+            "Baseline",
+        ],
+        capsys,
+    )
+    result = _run_cli_json(
+        [
+            "log",
+            "--directory",
+            str(tmp_path),
+            "--since",
+            "2026-02-99",
+        ],
+        capsys,
+    )
+    assert result["exit_code"] == 1
+    assert result["payload"]["status"] == "error"
+    assert result["payload"]["error_code"] == "INVALID_INPUT"
+
+
+def test_cli_config_non_json_output_shows_values(tmp_path: Path, capsys) -> None:
+    exit_code = main(
+        [
+            "init",
+            "--directory",
+            str(tmp_path),
+            "--name",
+            "CLI Project",
+        ]
+    )
+    assert exit_code == 0
+    capsys.readouterr()
+
+    exit_code = main(["config", "--directory", str(tmp_path), "--list"])
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "config:" in output
+    assert "project_name: CLI Project" in output

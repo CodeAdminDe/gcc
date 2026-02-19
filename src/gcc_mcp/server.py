@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
@@ -20,6 +19,7 @@ from .models import (
     MergeRequest,
     StatusRequest,
 )
+from .runtime import get_runtime_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -300,21 +300,25 @@ def gcc_status(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="GCC MCP server")
+    try:
+        transport_default, host_default, port_default = get_runtime_defaults()
+    except ValueError as exc:
+        parser.error(str(exc))
     parser.add_argument(
         "--transport",
         choices=["stdio", "streamable-http"],
-        default=os.getenv("GCC_MCP_TRANSPORT", "stdio"),
+        default=transport_default,
         help="Server transport mode (default: stdio).",
     )
     parser.add_argument(
         "--host",
-        default=os.getenv("GCC_MCP_HOST", "127.0.0.1"),
+        default=host_default,
         help="Host for streamable HTTP transport.",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("GCC_MCP_PORT", "8000")),
+        default=port_default,
         help="Port for streamable HTTP transport.",
     )
     args = parser.parse_args()

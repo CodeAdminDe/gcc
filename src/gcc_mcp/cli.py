@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date
 from typing import Any
 
 from pydantic import ValidationError
@@ -61,6 +62,19 @@ def _print_payload(payload: dict[str, Any], as_json: bool) -> None:
     ):
         if key in payload and payload[key] not in ("", None):
             print(f"{key}: {payload[key]}")
+
+    if "config" in payload and isinstance(payload["config"], dict):
+        print("config:")
+        for config_key, config_value in payload["config"].items():
+            print(f"  {config_key}: {config_value}")
+
+    if "values" in payload and isinstance(payload["values"], dict):
+        print("values:")
+        for config_key, config_value in payload["values"].items():
+            print(f"  {config_key}: {config_value}")
+
+    if "key" in payload and "value" in payload:
+        print(f"{payload['key']}: {payload.get('value')}")
 
     if "branches" in payload:
         for branch in payload["branches"]:
@@ -350,11 +364,21 @@ def main(argv: list[str] | None = None) -> int:
                     "Use `gcc-cli config --list` or `gcc-cli config <key> [value]`.",
                 )
         elif args.command == "log":
+            since: date | None = None
+            if args.since:
+                try:
+                    since = date.fromisoformat(args.since)
+                except ValueError as exc:
+                    raise GCCError(
+                        ErrorCode.INVALID_INPUT,
+                        "Invalid --since date format",
+                        "Use YYYY-MM-DD.",
+                    ) from exc
             response = engine.get_log(
                 directory=args.directory,
                 branch_name=args.branch,
                 limit=args.limit,
-                since=args.since or None,
+                since=since,
                 commit_type=args.type or None,
                 tags=_csv_list(args.tags),
             )

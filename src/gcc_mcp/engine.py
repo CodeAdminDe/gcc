@@ -598,6 +598,11 @@ class GCCEngine:
             value = str(value)
             self._require_branch(gcc_dir, value)
 
+        if key == "current_branch":
+            self.checkout_branch(directory, value)
+            _, updated_config = self._load_gcc_state(directory)
+            return updated_config
+
         config[key] = value
         config["updated_at"] = self._now_iso()
         self.file_manager.write_yaml(gcc_dir / CONFIG_FILE_NAME, config)

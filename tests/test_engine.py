@@ -285,3 +285,29 @@ def test_context_redaction_mode(tmp_path: Path, engine: GCCEngine) -> None:
     assert context.redaction_applied is True
     commits = context.data["branches"][0]["commits"]
     assert "[REDACTED]" in commits[0]["message"] or "[REDACTED_PATH]" in commits[0]["message"]
+
+
+def test_set_config_current_branch_uses_checkout_side_effects(
+    tmp_path: Path, engine: GCCEngine
+) -> None:
+    engine.initialize(
+        InitRequest(
+            directory=str(tmp_path),
+            project_name="Demo Project",
+        )
+    )
+    engine.branch(
+        BranchRequest(
+            directory=str(tmp_path),
+            name="feature-a",
+            description="Feature branch",
+            from_branch="main",
+        )
+    )
+
+    updated = engine.set_config(str(tmp_path), "current_branch", "main")
+    assert updated["current_branch"] == "main"
+    activity = updated.get("activity_log", [])
+    assert activity
+    assert activity[-1]["action"] == "CHECKOUT"
+    assert activity[-1]["branch"] == "main"

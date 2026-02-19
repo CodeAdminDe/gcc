@@ -37,6 +37,6 @@ gcc-mcp
 
 ## Production Hardening Backlog
 
-- Add authn/authz layer for remote endpoints.
+- Introduce an authn/authz layer for remote endpoints.
 - Add structured request/response access logs with sensitive-field filtering.
-- Add rate limiting and reverse-proxy guidance.
+- Provide rate limiting and reverse-proxy guidance.
