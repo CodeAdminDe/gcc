@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
@@ -35,6 +36,33 @@ mcp = FastMCP(
 
 engine = GCCEngine()
 
+READ_ONLY_TOOL_ANNOTATIONS = {
+    "readOnlyHint": True,
+    "idempotentHint": True,
+    "destructiveHint": False,
+    "openWorldHint": False,
+}
+
+WRITE_TOOL_ANNOTATIONS = {
+    "readOnlyHint": False,
+    "idempotentHint": False,
+    "destructiveHint": False,
+    "openWorldHint": False,
+}
+
+
+def _register_tool(annotations: dict[str, bool]):
+    """Register tool with annotations, with backwards-compatible fallback."""
+
+    def decorator(func):
+        try:
+            return mcp.tool(annotations=annotations)(func)
+        except TypeError:
+            logger.debug("FastMCP tool annotations not supported in this SDK version; using fallback.")
+            return mcp.tool()(func)
+
+    return decorator
+
 
 def _error_payload_from_exception(exc: Exception) -> dict[str, Any]:
     if isinstance(exc, GCCError):
@@ -64,7 +92,7 @@ def _error_payload_from_exception(exc: Exception) -> dict[str, Any]:
     return payload
 
 
-@mcp.tool()
+@_register_tool(WRITE_TOOL_ANNOTATIONS)
 def gcc_init(
     directory: Annotated[
         str, Field(description="Path to directory where .GCC should be initialized")
@@ -114,7 +142,7 @@ def gcc_init(
         return _error_payload_from_exception(exc)
 
 
-@mcp.tool()
+@_register_tool(WRITE_TOOL_ANNOTATIONS)
 def gcc_commit(
     directory: Annotated[str, Field(description="Path to GCC-enabled directory")],
     message: Annotated[str, Field(min_length=1, max_length=200, description="Commit message")],
@@ -158,7 +186,7 @@ def gcc_commit(
         return _error_payload_from_exception(exc)
 
 
-@mcp.tool()
+@_register_tool(WRITE_TOOL_ANNOTATIONS)
 def gcc_branch(
     directory: Annotated[str, Field(description="Path to GCC-enabled directory")],
     name: Annotated[
@@ -190,7 +218,7 @@ def gcc_branch(
         return _error_payload_from_exception(exc)
 
 
-@mcp.tool()
+@_register_tool(WRITE_TOOL_ANNOTATIONS)
 def gcc_merge(
     directory: Annotated[str, Field(description="Path to GCC-enabled directory")],
     source_branch: Annotated[str, Field(description="Branch to merge from")],
@@ -214,7 +242,7 @@ def gcc_merge(
         return _error_payload_from_exception(exc)
 
 
-@mcp.tool()
+@_register_tool(READ_ONLY_TOOL_ANNOTATIONS)
 def gcc_context(
     directory: Annotated[str, Field(description="Path to GCC-enabled directory")],
     level: Annotated[
@@ -237,6 +265,10 @@ def gcc_context(
         str,
         Field(description="Output format: markdown, json, yaml"),
     ] = "markdown",
+    redact_sensitive: Annotated[
+        bool,
+        Field(description="Apply conservative redaction to potentially sensitive fields."),
+    ] = False,
 ) -> dict[str, Any]:
     """Retrieve context snapshots across branches."""
     try:
@@ -247,13 +279,14 @@ def gcc_context(
             since=since,
             tags=tags or [],
             format=format,
+            redact_sensitive=redact_sensitive,
         )
         return engine.get_context(request).model_dump(mode="json")
     except Exception as exc:  # noqa: BLE001
         return _error_payload_from_exception(exc)
 
 
-@mcp.tool()
+@_register_tool(READ_ONLY_TOOL_ANNOTATIONS)
 def gcc_status(
     directory: Annotated[str, Field(description="Path to GCC-enabled directory")],
 ) -> dict[str, Any]:
@@ -270,11 +303,20 @@ def main() -> None:
     parser.add_argument(
         "--transport",
         choices=["stdio", "streamable-http"],
-        default="stdio",
+        default=os.getenv("GCC_MCP_TRANSPORT", "stdio"),
         help="Server transport mode (default: stdio).",
     )
-    parser.add_argument("--host", default="127.0.0.1", help="Host for streamable HTTP transport.")
-    parser.add_argument("--port", type=int, default=8000, help="Port for streamable HTTP transport.")
+    parser.add_argument(
+        "--host",
+        default=os.getenv("GCC_MCP_HOST", "127.0.0.1"),
+        help="Host for streamable HTTP transport.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.getenv("GCC_MCP_PORT", "8000")),
+        help="Port for streamable HTTP transport.",
+    )
     args = parser.parse_args()
 
     if args.transport == "stdio":

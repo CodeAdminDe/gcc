@@ -116,6 +116,7 @@ class ContextRequest(BaseModel):
     since: date | None = None
     tags: list[str] = Field(default_factory=list)
     format: ContextFormat = ContextFormat.MARKDOWN
+    redact_sensitive: bool = False
 
 
 class StatusRequest(BaseModel):
@@ -168,6 +169,8 @@ class ContextResponse(BaseToolResponse):
     level: ContextLevel | None = None
     format: ContextFormat | None = None
     generated_at: str = ""
+    redaction_applied: bool = False
+    security_notice: str = ""
     data: dict[str, Any] = Field(default_factory=dict)
     rendered: str = ""
 

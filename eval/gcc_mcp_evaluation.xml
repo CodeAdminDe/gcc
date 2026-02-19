@@ -1,0 +1,42 @@
+<evaluation>
+  <qa_pair>
+    <question>How many MCP tools are implemented by this GCC server?</question>
+    <answer>6</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the default git context policy during GCC initialization?</question>
+    <answer>ignore</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which acknowledgement flag is required when tracking .GCC in git?</question>
+    <answer>acknowledge_sensitive_data_risk</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which CLI command switches the active GCC branch?</question>
+    <answer>checkout</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What field records whether a branch has been integrated by merge while remaining active?</question>
+    <answer>integration_status</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which three context detail levels are supported?</question>
+    <answer>summary,detailed,full</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What configuration key enables default redaction behavior?</question>
+    <answer>redaction_mode</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which environment variable controls server transport mode?</question>
+    <answer>GCC_MCP_TRANSPORT</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which CI linter command is used for static checks?</question>
+    <answer>python -m ruff check src tests</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the script path for local MCP Inspector smoke preparation?</question>
+    <answer>scripts/run_mcp_inspector.sh</answer>
+  </qa_pair>
+</evaluation>

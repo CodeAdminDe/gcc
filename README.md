@@ -43,6 +43,20 @@ Run CLI (parity with MCP tools):
 gcc-cli --help
 ```
 
+Implemented CLI commands:
+
+- `init`
+- `commit`
+- `branch`
+- `merge`
+- `context`
+- `status`
+- `config`
+- `log`
+- `list`
+- `checkout`
+- `delete`
+
 Example init with secure default (`.GCC` ignored by git):
 
 ```bash
@@ -68,6 +82,48 @@ gcc-cli init \
 security-relevant details).  
 Default behavior is `git_context_policy=ignore`, which adds `.GCC/` to `.gitignore`.  
 Tracking `.GCC/` in git requires explicit acknowledgement.
+
+Context retrieval supports optional conservative redaction:
+
+```bash
+gcc-cli context --redact-sensitive --level detailed
+```
+
+You can persist this behavior:
+
+```bash
+gcc-cli config redaction_mode true
+```
+
+## Streamable HTTP Mode
+
+`gcc-mcp` remains stdio-first for v0.1/v0.2 local workflows.  
+For remote-style testing/deployment, streamable HTTP mode is available:
+
+```bash
+gcc-mcp --transport streamable-http --host 127.0.0.1 --port 8000
+```
+
+Environment variable equivalents:
+
+- `GCC_MCP_TRANSPORT` (`stdio` or `streamable-http`)
+- `GCC_MCP_HOST`
+- `GCC_MCP_PORT`
+
+## CI Quality Gates
+
+GitHub Actions workflow: `.github/workflows/ci.yml`
+
+Checks:
+
+- `python -m ruff check src tests`
+- `python -m pytest -q`
+- `python -m py_compile src/gcc_mcp/*.py`
+
+## Inspector & Evaluations
+
+- MCP Inspector runbook: `docs/mcp-inspector-runbook.md`
+- Evaluation pack: `eval/gcc_mcp_evaluation.xml`
 
 ## Project Layout
 

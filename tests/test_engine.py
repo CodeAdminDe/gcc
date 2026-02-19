@@ -255,3 +255,33 @@ def test_context_and_status_outputs(tmp_path: Path, engine: GCCEngine) -> None:
     assert status.project_name == "Demo Project"
     assert status.current_branch == "main"
     assert status.active_branches == 1
+
+
+def test_context_redaction_mode(tmp_path: Path, engine: GCCEngine) -> None:
+    engine.initialize(
+        InitRequest(
+            directory=str(tmp_path),
+            project_name="Demo Project",
+        )
+    )
+    engine.commit(
+        CommitRequest(
+            directory=str(tmp_path),
+            message="Configured token=abcd1234abcd1234abcd1234",
+            notes="password=super-secret-value",
+            tags=["security"],
+        )
+    )
+
+    context = engine.get_context(
+        ContextRequest(
+            directory=str(tmp_path),
+            level="detailed",
+            format="json",
+            redact_sensitive=True,
+        )
+    )
+    assert context.status == "success"
+    assert context.redaction_applied is True
+    commits = context.data["branches"][0]["commits"]
+    assert "[REDACTED]" in commits[0]["message"] or "[REDACTED_PATH]" in commits[0]["message"]

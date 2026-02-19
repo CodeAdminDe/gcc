@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -44,6 +45,10 @@ SENSITIVE_CONTEXT_NOTICE = (
     ".GCC can contain sensitive or security-relevant context (reasoning traces, "
     "credentials, architecture details). Decide explicitly whether this directory should "
     "be tracked in Git for each repository."
+)
+REDACTION_NOTICE = (
+    "Context data may include sensitive content. Enable redaction with "
+    "context.redact_sensitive=true or set config redaction_mode=true."
 )
 
 
@@ -90,6 +95,7 @@ class GCCEngine:
             "default_branch": DEFAULT_BRANCH,
             "current_branch": DEFAULT_BRANCH,
             "auto_commit": False,
+            "redaction_mode": False,
             "git_context_policy": request.git_context_policy.value,
             "acknowledge_sensitive_data_risk": request.acknowledge_sensitive_data_risk,
             "created_at": timestamp,
@@ -480,6 +486,10 @@ class GCCEngine:
             },
         }
 
+        redaction_enabled = bool(request.redact_sensitive or config.get("redaction_mode", False))
+        if redaction_enabled:
+            data = self._redact_payload(data)
+
         rendered = ""
         if request.format == ContextFormat.MARKDOWN:
             rendered = self._render_context_markdown(data)
@@ -492,6 +502,8 @@ class GCCEngine:
             level=request.level,
             format=request.format,
             generated_at=generated_at,
+            redaction_applied=redaction_enabled,
+            security_notice=REDACTION_NOTICE,
             data=data,
             rendered=rendered,
         )
@@ -543,6 +555,234 @@ class GCCEngine:
             archived_branches=archived,
             recent_activity=recent_activity,
         )
+
+    def get_config(self, directory: str) -> dict[str, Any]:
+        """Return raw GCC configuration for the target directory."""
+        _, config = self._load_gcc_state(directory)
+        return config
+
+    def set_config(self, directory: str, key: str, value: Any) -> dict[str, Any]:
+        """Set a mutable config key and persist it."""
+        gcc_dir, config = self._load_gcc_state(directory)
+        mutable_keys = {
+            "default_branch",
+            "auto_commit",
+            "editor",
+            "log_level",
+            "max_commits",
+            "context_cache_ttl",
+            "current_branch",
+            "redaction_mode",
+        }
+        if key not in mutable_keys:
+            raise GCCError(
+                ErrorCode.INVALID_INPUT,
+                f"Unsupported config key '{key}'",
+                f"Use one of: {', '.join(sorted(mutable_keys))}",
+            )
+
+        if key in {"max_commits", "context_cache_ttl"}:
+            try:
+                value = int(value)
+            except (TypeError, ValueError) as exc:
+                raise GCCError(
+                    ErrorCode.INVALID_INPUT,
+                    f"Config key '{key}' requires an integer value",
+                    "Provide a numeric value.",
+                ) from exc
+
+        if key in {"auto_commit", "redaction_mode"}:
+            value = self._coerce_bool(value)
+
+        if key in {"default_branch", "current_branch"}:
+            value = str(value)
+            self._require_branch(gcc_dir, value)
+
+        config[key] = value
+        config["updated_at"] = self._now_iso()
+        self.file_manager.write_yaml(gcc_dir / CONFIG_FILE_NAME, config)
+        return config
+
+    def checkout_branch(self, directory: str, branch_name: str) -> dict[str, Any]:
+        """Switch active branch in GCC configuration."""
+        gcc_dir, config = self._load_gcc_state(directory)
+        self._require_branch(gcc_dir, branch_name)
+        previous = str(config.get("current_branch", DEFAULT_BRANCH))
+        config["current_branch"] = branch_name
+        timestamp = self._now_iso()
+        config["updated_at"] = timestamp
+        self._append_activity(
+            config=config,
+            action="CHECKOUT",
+            branch=branch_name,
+            message=f"Switched from {previous} to {branch_name}",
+            timestamp=timestamp,
+        )
+        self.file_manager.write_yaml(gcc_dir / CONFIG_FILE_NAME, config)
+        self._update_main_status(gcc_dir, branch_name, timestamp)
+        return {
+            "status": "success",
+            "message": f"Switched to branch '{branch_name}'",
+            "previous_branch": previous,
+            "current_branch": branch_name,
+        }
+
+    def list_branches(
+        self,
+        directory: str,
+        active_only: bool = False,
+        archived_only: bool = False,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """List branches with filters."""
+        if active_only and archived_only:
+            raise GCCError(
+                ErrorCode.INVALID_INPUT,
+                "Cannot combine active-only and archived-only filters",
+                "Pick exactly one branch-state filter or none.",
+            )
+
+        gcc_dir, config = self._load_gcc_state(directory)
+        tags_filter = {tag.lower() for tag in (tags or [])}
+        current_branch = str(config.get("current_branch", DEFAULT_BRANCH))
+        branches: list[dict[str, Any]] = []
+
+        for branch_dir in sorted((gcc_dir / BRANCHES_DIR_NAME).iterdir(), key=lambda x: x.name):
+            if not branch_dir.is_dir():
+                continue
+            metadata = self.file_manager.read_yaml(branch_dir / METADATA_FILE_NAME)
+            branch_info = metadata.get("branch", {})
+            status = str(branch_info.get("status", "active"))
+            branch_tags = [str(tag) for tag in metadata.get("tags", [])]
+            branch_tags_lower = {tag.lower() for tag in branch_tags}
+
+            if active_only and status != "active":
+                continue
+            if archived_only and status == "active":
+                continue
+            if tags_filter and not branch_tags_lower.intersection(tags_filter):
+                continue
+
+            branches.append(
+                {
+                    "name": branch_dir.name,
+                    "status": status,
+                    "integration_status": str(branch_info.get("integration_status", "open")),
+                    "description": str(branch_info.get("description", "")),
+                    "parent": branch_info.get("parent"),
+                    "current": branch_dir.name == current_branch,
+                    "tags": branch_tags,
+                    "commit_count": int(metadata.get("commits", {}).get("count", 0)),
+                    "last_commit": metadata.get("commits", {}).get("last"),
+                }
+            )
+
+        return {
+            "status": "success",
+            "message": "Branches listed",
+            "current_branch": current_branch,
+            "count": len(branches),
+            "branches": branches,
+        }
+
+    def get_log(
+        self,
+        directory: str,
+        branch_name: str | None = None,
+        limit: int | None = None,
+        since: date | None = None,
+        commit_type: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Return commit history entries for a branch."""
+        gcc_dir, config = self._load_gcc_state(directory)
+        branch = branch_name or str(config.get("current_branch", DEFAULT_BRANCH))
+        branch_dir = self._require_branch(gcc_dir, branch)
+        metadata = self.file_manager.read_yaml(branch_dir / METADATA_FILE_NAME)
+        history = list(metadata.get("history", []))
+
+        if commit_type:
+            history = [entry for entry in history if str(entry.get("type", "")) == commit_type]
+        history = self._filter_history(history=history, since=since, tags=tags or [])
+        if limit is not None and limit > 0:
+            history = history[-limit:]
+
+        return {
+            "status": "success",
+            "message": "Log retrieved",
+            "branch": branch,
+            "count": len(history),
+            "entries": history,
+        }
+
+    def delete_branch(
+        self,
+        directory: str,
+        branch_name: str,
+        force: bool = False,
+        archive: bool = False,
+    ) -> dict[str, Any]:
+        """Archive or delete a branch."""
+        if not branch_name:
+            raise GCCError(
+                ErrorCode.INVALID_INPUT,
+                "Branch name is required",
+                "Provide a branch name.",
+            )
+
+        gcc_dir, config = self._load_gcc_state(directory)
+        if branch_name == DEFAULT_BRANCH:
+            raise GCCError(
+                ErrorCode.INVALID_INPUT,
+                "Cannot delete the default branch",
+                "Use merge/archive workflows instead.",
+            )
+
+        current = str(config.get("current_branch", DEFAULT_BRANCH))
+        if branch_name == current:
+            raise GCCError(
+                ErrorCode.INVALID_INPUT,
+                f"Cannot delete current branch '{branch_name}'",
+                "Checkout a different branch first.",
+            )
+
+        branch_dir = self._require_branch(gcc_dir, branch_name)
+        metadata_path = branch_dir / METADATA_FILE_NAME
+        metadata = self.file_manager.read_yaml(metadata_path)
+        timestamp = self._now_iso()
+
+        if archive:
+            metadata.setdefault("branch", {})
+            metadata["branch"]["status"] = "abandoned"
+            metadata["branch"]["archived_at"] = timestamp
+            self.file_manager.write_yaml(metadata_path, metadata)
+            result_message = f"Branch '{branch_name}' archived"
+        elif force:
+            shutil.rmtree(branch_dir)
+            result_message = f"Branch '{branch_name}' deleted"
+        else:
+            raise GCCError(
+                ErrorCode.INVALID_INPUT,
+                f"Branch '{branch_name}' was not removed",
+                "Use --archive or --force for delete operation.",
+            )
+
+        self._append_activity(
+            config=config,
+            action="DELETE" if force else "ARCHIVE",
+            branch=branch_name,
+            message=result_message,
+            timestamp=timestamp,
+        )
+        config["updated_at"] = timestamp
+        self.file_manager.write_yaml(gcc_dir / CONFIG_FILE_NAME, config)
+
+        return {
+            "status": "success",
+            "message": result_message,
+            "branch": branch_name,
+            "mode": "force-delete" if force else "archive",
+        }
 
     def _resolve_existing_directory(self, directory: str) -> Path:
         path = Path(directory).expanduser().resolve()
@@ -791,6 +1031,45 @@ class GCCEngine:
             self.file_manager.write_text(gitignore_path, content)
 
         return updated
+
+    def _coerce_bool(self, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        raise GCCError(
+            ErrorCode.INVALID_INPUT,
+            f"Cannot parse boolean value '{value}'",
+            "Use true/false values.",
+        )
+
+    def _redact_payload(self, payload: Any) -> Any:
+        if isinstance(payload, dict):
+            return {key: self._redact_payload(value) for key, value in payload.items()}
+        if isinstance(payload, list):
+            return [self._redact_payload(item) for item in payload]
+        if isinstance(payload, str):
+            return self._redact_string(payload)
+        return payload
+
+    def _redact_string(self, value: str) -> str:
+        redacted = value
+        # Common key=value secret patterns.
+        redacted = re.sub(
+            r"(?i)\b(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*([^\s,;]+)",
+            r"\1=[REDACTED]",
+            redacted,
+        )
+        # Bearer tokens.
+        redacted = re.sub(r"(?i)\bbearer\s+[a-z0-9\-\._~\+\/]+=*", "Bearer [REDACTED]", redacted)
+        # High-entropy long literals (simple heuristic).
+        redacted = re.sub(r"\b[A-Za-z0-9_\-]{24,}\b", "[REDACTED]", redacted)
+        # Absolute filesystem paths.
+        redacted = re.sub(r"(?<![A-Za-z0-9])/(?:[^/\s]+/)+[^/\s]*", "/[REDACTED_PATH]", redacted)
+        return redacted
 
     def _generate_commit_id(self) -> str:
         return f"gcc-commit-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')}"
