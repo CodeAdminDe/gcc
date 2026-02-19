@@ -302,3 +302,11 @@ def test_verify_signed_audit_log_rejects_invalid_signing_key_input(tmp_path: Pat
             log_path=tmp_path / "audit.jsonl",
             signing_key="  ",
         )
+
+
+def test_verify_signed_audit_log_rejects_missing_file(tmp_path: Path) -> None:
+    with pytest.raises(GCCError):
+        verify_signed_audit_log(
+            log_path=tmp_path / "nonexistent.jsonl",
+            signing_key="unit-test-signing-key",
+        )
