@@ -249,6 +249,8 @@ def test_cli_config_non_json_output_shows_values(tmp_path: Path, capsys) -> None
 def test_cli_audit_verify_success_and_failure(tmp_path: Path, capsys) -> None:
     signing_key = "unit-test-signing-key"
     log_path = tmp_path / "audit.jsonl"
+    key_file = tmp_path / "audit-signing.key"
+    key_file.write_text(signing_key + "\n", encoding="utf-8")
     logger = AuditLogger(log_path=log_path, redact_sensitive=False, signing_key=signing_key)
     logger.log_tool_event(
         tool_name="gcc_status",
@@ -270,6 +272,19 @@ def test_cli_audit_verify_success_and_failure(tmp_path: Path, capsys) -> None:
     assert success["exit_code"] == 0
     assert success["payload"]["status"] == "success"
     assert success["payload"]["entries_checked"] == 1
+
+    success_from_file = _run_cli_json(
+        [
+            "audit-verify",
+            "--log-file",
+            str(log_path),
+            "--signing-key-file",
+            str(key_file),
+        ],
+        capsys,
+    )
+    assert success_from_file["exit_code"] == 0
+    assert success_from_file["payload"]["status"] == "success"
 
     failure = _run_cli_json(
         [

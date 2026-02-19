@@ -132,3 +132,18 @@ Execution items:
 4. Runtime parsing/validation for audit signing key and profile interactions.
 5. Regression tests for security-policy and signed-audit behavior.
 6. Deployment/security docs updates for strict profile rollout.
+
+## v0.8 Audit Verification and Key Lifecycle Controls (in progress)
+
+Tracking:
+
+- Milestone: `GCC MCP v0.8 - Audit Verification and Key Lifecycle Controls`
+- Issue: `#20 v0.8 Execution: audit verification + key lifecycle controls`
+
+Execution items:
+
+1. Signed audit verification utility and CLI command.
+2. Deterministic failure diagnostics for hash/signature/chain mismatches.
+3. Safer strict-profile secret sourcing (`audit-signing-key-file`; CLI key restrictions).
+4. Regression tests for verification and policy refinements.
+5. Audit verification runbook and key-rotation guidance.

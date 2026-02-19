@@ -147,7 +147,7 @@ gcc-mcp --transport streamable-http \
   --auth-mode token \
   --auth-token 'replace-me' \
   --audit-log-file .GCC/server-audit.jsonl \
-  --audit-signing-key 'replace-me'
+  --audit-signing-key-file .secrets/audit-signing.key
 ```
 
 Environment variable equivalents:
@@ -159,6 +159,7 @@ Environment variable equivalents:
 - `GCC_MCP_AUDIT_LOG` (optional JSONL audit log file path)
 - `GCC_MCP_AUDIT_REDACT` (`true/false`, default `true`)
 - `GCC_MCP_AUDIT_SIGNING_KEY` (optional key for signed audit events; requires audit log)
+- `GCC_MCP_AUDIT_SIGNING_KEY_FILE` (optional file source for audit signing key)
 - `GCC_MCP_RATE_LIMIT_PER_MINUTE` (integer, default `0` = disabled)
 - `GCC_MCP_AUDIT_MAX_FIELD_CHARS` (integer, default `4000`; `0` disables truncation)
 - `GCC_MCP_SECURITY_PROFILE` (`baseline` default or `strict`)
@@ -180,7 +181,8 @@ and network controls at the proxy layer (`docs/deployment.md`).
 When `security-profile` is `strict` and transport is `streamable-http`, `gcc-mcp` enforces:
 - auth mode cannot be `off`
 - audit log must be configured
-- audit signing key must be configured
+- audit signing key material must be configured (env var or key file)
+- direct `--audit-signing-key` usage is rejected
 
 Optional audit log via CLI flag:
 
@@ -201,7 +203,7 @@ Verify signed audit log integrity:
 ```bash
 gcc-cli audit-verify \
   --log-file .GCC/server-audit.jsonl \
-  --signing-key 'replace-me'
+  --signing-key-file .secrets/audit-signing.key
 ```
 
 ## CI Quality Gates
@@ -219,6 +221,7 @@ Checks:
 Security reference:
 
 - `docs/security-model.md`
+- `docs/audit-verification-runbook.md`
 
 ## Inspector & Evaluations
 

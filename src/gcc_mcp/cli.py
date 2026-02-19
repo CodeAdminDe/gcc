@@ -23,6 +23,7 @@ from .models import (
     MergeRequest,
     StatusRequest,
 )
+from .runtime import resolve_audit_signing_key
 
 engine = GCCEngine()
 
@@ -270,6 +271,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("GCC_MCP_AUDIT_SIGNING_KEY", ""),
         help="HMAC signing key used to sign audit events (default: env var).",
     )
+    audit_verify.add_argument(
+        "--signing-key-file",
+        default=os.environ.get("GCC_MCP_AUDIT_SIGNING_KEY_FILE", ""),
+        help="Optional file path containing signing key; safer than inline key.",
+    )
     audit_verify.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
     return parser
@@ -426,9 +432,20 @@ def main(argv: list[str] | None = None) -> int:
                 archive=args.archive,
             )
         elif args.command == "audit-verify":
+            try:
+                signing_key = resolve_audit_signing_key(
+                    audit_signing_key=str(args.signing_key),
+                    audit_signing_key_file=str(args.signing_key_file),
+                )
+            except ValueError as exc:
+                raise GCCError(
+                    ErrorCode.INVALID_INPUT,
+                    str(exc),
+                    "Provide signing key via --signing-key-file or GCC_MCP_AUDIT_SIGNING_KEY.",
+                ) from exc
             response = verify_signed_audit_log(
                 log_path=Path(args.log_file),
-                signing_key=str(args.signing_key),
+                signing_key=signing_key,
             )
         else:
             response = engine.get_status(StatusRequest(directory=args.directory)).model_dump(mode="json")

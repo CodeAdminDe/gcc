@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 from typing import Annotated, Any, Callable
 
@@ -38,6 +39,7 @@ from .runtime import (
     get_runtime_operations_defaults,
     get_runtime_security_policy_defaults,
     parse_csv_values,
+    resolve_audit_signing_key,
     resolve_auth_metadata_urls,
     get_runtime_security_defaults,
     validate_runtime_auth_values,
@@ -489,6 +491,14 @@ def _run_streamable_http_with_proxy_header_auth(
     uvicorn.Server(config).run()
 
 
+def _cli_option_supplied(option_name: str) -> bool:
+    """Return whether a CLI option was explicitly provided."""
+    return any(
+        argument == option_name or argument.startswith(f"{option_name}=")
+        for argument in sys.argv[1:]
+    )
+
+
 def main() -> None:
     """Run GCC MCP server in stdio or streamable HTTP mode."""
     parser = argparse.ArgumentParser(description="GCC MCP server")
@@ -571,6 +581,14 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--audit-signing-key-file",
+        default=security_policy_defaults.audit_signing_key_file,
+        help=(
+            "Optional file containing HMAC key for signed audit events. "
+            "Recommended for strict profile deployments."
+        ),
+    )
+    parser.add_argument(
         "--auth-mode",
         choices=sorted(AUTH_MODES),
         default=auth_defaults.auth_mode,
@@ -643,6 +661,7 @@ def main() -> None:
     runtime_policy = RuntimeSecurityPolicyDefaults(
         security_profile=str(args.security_profile).strip().lower(),
         audit_signing_key=str(args.audit_signing_key).strip(),
+        audit_signing_key_file=str(args.audit_signing_key_file).strip(),
     )
     runtime_auth = RuntimeAuthDefaults(
         auth_mode=args.auth_mode,
@@ -678,6 +697,15 @@ def main() -> None:
             security_profile=runtime_policy.security_profile,
             audit_log_path=str(args.audit_log_file),
             audit_signing_key=runtime_policy.audit_signing_key,
+            audit_signing_key_file=runtime_policy.audit_signing_key_file,
+            audit_signing_key_from_cli=(
+                _cli_option_supplied("--audit-signing-key")
+                and bool(runtime_policy.audit_signing_key)
+            ),
+        )
+        resolved_audit_signing_key = resolve_audit_signing_key(
+            audit_signing_key=runtime_policy.audit_signing_key,
+            audit_signing_key_file=runtime_policy.audit_signing_key_file,
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -689,7 +717,7 @@ def main() -> None:
         log_path=Path(audit_path) if audit_path else None,
         redact_sensitive=bool(args.audit_redact_sensitive),
         max_field_chars=int(args.audit_max_field_chars),
-        signing_key=runtime_policy.audit_signing_key,
+        signing_key=resolved_audit_signing_key,
     )
     rate_limiter.configure(int(args.rate_limit_per_minute))
     _configure_fastmcp_auth(

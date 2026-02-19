@@ -13,6 +13,7 @@ from gcc_mcp.runtime import (
     get_runtime_security_defaults,
     is_loopback_host,
     parse_csv_values,
+    resolve_audit_signing_key,
     resolve_auth_metadata_urls,
     validate_runtime_auth_values,
     validate_runtime_security_policy_values,
@@ -217,6 +218,7 @@ def _policy_defaults(**overrides) -> RuntimeSecurityPolicyDefaults:
     payload = {
         "security_profile": "baseline",
         "audit_signing_key": "",
+        "audit_signing_key_file": "",
     }
     payload.update(overrides)
     return RuntimeSecurityPolicyDefaults(**payload)
@@ -251,10 +253,12 @@ def test_runtime_security_policy_defaults_parsing() -> None:
         env={
             "GCC_MCP_SECURITY_PROFILE": "strict",
             "GCC_MCP_AUDIT_SIGNING_KEY": " signing-key ",
+            "GCC_MCP_AUDIT_SIGNING_KEY_FILE": " /tmp/audit-signing.key ",
         }
     )
     assert defaults.security_profile == "strict"
     assert defaults.audit_signing_key == "signing-key"
+    assert defaults.audit_signing_key_file == "/tmp/audit-signing.key"
 
 
 def test_runtime_security_policy_defaults_invalid_profile() -> None:
@@ -401,6 +405,18 @@ def test_validate_runtime_security_policy_values_signing_requires_audit_log() ->
         )
 
 
+def test_validate_runtime_security_policy_values_signing_key_sources_mutually_exclusive() -> None:
+    with pytest.raises(ValueError):
+        validate_runtime_security_policy_values(
+            transport="streamable-http",
+            auth_mode="token",
+            security_profile="baseline",
+            audit_log_path=".GCC/audit.jsonl",
+            audit_signing_key="signing-key",
+            audit_signing_key_file=".secrets/audit-signing.key",
+        )
+
+
 def test_validate_runtime_security_policy_values_strict_mode() -> None:
     with pytest.raises(ValueError):
         validate_runtime_security_policy_values(
@@ -434,6 +450,23 @@ def test_validate_runtime_security_policy_values_strict_mode() -> None:
         audit_log_path=".GCC/audit.jsonl",
         audit_signing_key="signing-key",
     )
+    validate_runtime_security_policy_values(
+        transport="streamable-http",
+        auth_mode="token",
+        security_profile="strict",
+        audit_log_path=".GCC/audit.jsonl",
+        audit_signing_key="",
+        audit_signing_key_file=".secrets/audit-signing.key",
+    )
+    with pytest.raises(ValueError):
+        validate_runtime_security_policy_values(
+            transport="streamable-http",
+            auth_mode="token",
+            security_profile="strict",
+            audit_log_path=".GCC/audit.jsonl",
+            audit_signing_key="signing-key",
+            audit_signing_key_from_cli=True,
+        )
     # Strict profile focuses on remote transport; stdio remains valid.
     validate_runtime_security_policy_values(
         transport="stdio",
@@ -443,6 +476,33 @@ def test_validate_runtime_security_policy_values_strict_mode() -> None:
         audit_signing_key="",
     )
 
+
+def test_resolve_audit_signing_key_from_file(tmp_path) -> None:
+    key_file = tmp_path / "audit-signing.key"
+    key_file.write_text(" file-key-value \n", encoding="utf-8")
+    assert (
+        resolve_audit_signing_key(
+            audit_signing_key="",
+            audit_signing_key_file=str(key_file),
+        )
+        == "file-key-value"
+    )
+
+
+def test_resolve_audit_signing_key_rejects_invalid_file_state(tmp_path) -> None:
+    with pytest.raises(ValueError):
+        resolve_audit_signing_key(
+            audit_signing_key="inline-key",
+            audit_signing_key_file=str(tmp_path / "audit-signing.key"),
+        )
+
+    empty_file = tmp_path / "empty.key"
+    empty_file.write_text("   \n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        resolve_audit_signing_key(
+            audit_signing_key="",
+            audit_signing_key_file=str(empty_file),
+        )
 
 def test_resolve_auth_metadata_urls() -> None:
     issuer, resource = resolve_auth_metadata_urls(

@@ -8,6 +8,7 @@ import os
 import re
 from dataclasses import dataclass
 from collections.abc import Mapping
+from pathlib import Path
 from urllib.parse import urlparse
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -40,6 +41,7 @@ class RuntimeSecurityPolicyDefaults:
 
     security_profile: str
     audit_signing_key: str
+    audit_signing_key_file: str
 
 
 def get_runtime_defaults(env: Mapping[str, str] | None = None) -> tuple[str, str, int]:
@@ -100,6 +102,7 @@ def get_runtime_security_policy_defaults(
     return RuntimeSecurityPolicyDefaults(
         security_profile=security_profile,
         audit_signing_key=source.get("GCC_MCP_AUDIT_SIGNING_KEY", "").strip(),
+        audit_signing_key_file=source.get("GCC_MCP_AUDIT_SIGNING_KEY_FILE", "").strip(),
     )
 
 
@@ -228,6 +231,8 @@ def validate_runtime_security_policy_values(
     security_profile: str,
     audit_log_path: str,
     audit_signing_key: str,
+    audit_signing_key_file: str = "",
+    audit_signing_key_from_cli: bool = False,
 ) -> None:
     """Validate security policy interactions for remote runtime hardening."""
     if security_profile not in SECURITY_PROFILES:
@@ -236,12 +241,22 @@ def validate_runtime_security_policy_values(
 
     normalized_audit_log_path = audit_log_path.strip()
     normalized_signing_key = audit_signing_key.strip()
+    normalized_signing_key_file = audit_signing_key_file.strip()
 
-    if normalized_signing_key and not normalized_audit_log_path:
+    if normalized_signing_key and normalized_signing_key_file:
+        raise ValueError("audit-signing-key and audit-signing-key-file are mutually exclusive.")
+
+    if (normalized_signing_key or normalized_signing_key_file) and not normalized_audit_log_path:
         raise ValueError("audit-signing-key requires audit-log-file.")
 
     if security_profile != "strict" or transport != "streamable-http":
         return
+
+    if audit_signing_key_from_cli and normalized_signing_key:
+        raise ValueError(
+            "security-profile strict forbids --audit-signing-key. "
+            "Use GCC_MCP_AUDIT_SIGNING_KEY or --audit-signing-key-file."
+        )
 
     if auth_mode == "off":
         raise ValueError(
@@ -251,10 +266,30 @@ def validate_runtime_security_policy_values(
         raise ValueError(
             "security-profile strict requires audit-log-file for streamable-http."
         )
-    if not normalized_signing_key:
+    if not (normalized_signing_key or normalized_signing_key_file):
         raise ValueError(
             "security-profile strict requires audit-signing-key for streamable-http."
         )
+
+
+def resolve_audit_signing_key(audit_signing_key: str, audit_signing_key_file: str) -> str:
+    """Resolve audit signing key from direct value or file source."""
+    normalized_signing_key = audit_signing_key.strip()
+    normalized_signing_key_file = audit_signing_key_file.strip()
+
+    if normalized_signing_key and normalized_signing_key_file:
+        raise ValueError("audit-signing-key and audit-signing-key-file are mutually exclusive.")
+    if not normalized_signing_key_file:
+        return normalized_signing_key
+
+    key_path = Path(normalized_signing_key_file).expanduser()
+    try:
+        signing_key_from_file = key_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise ValueError("Unable to read audit-signing-key-file.") from exc
+    if not signing_key_from_file:
+        raise ValueError("audit-signing-key-file must contain a non-empty key.")
+    return signing_key_from_file
 
 
 def resolve_auth_metadata_urls(

@@ -60,6 +60,7 @@ Primary trust boundaries:
 9. Security profile policy:
 - Runtime security profile supports `baseline` (default) and `strict`.
 - In `strict` with `streamable-http`: auth cannot be `off`, audit log must be enabled, and audit signing key must be configured.
+- In `strict`, direct CLI key injection (`--audit-signing-key`) is rejected to reduce shell-history exposure risk.
 
 10. CI security scanning:
 - Bandit static analysis runs on Python source.
@@ -76,3 +77,4 @@ Primary trust boundaries:
 - OAuth2 introspection availability/latency can affect request authorization outcomes.
 - Redaction is heuristic and should not be treated as formal secret detection.
 - Signed audits provide tamper evidence but not complete non-repudiation (key management remains critical).
+- Verifier currently supports one key per run; key rotation should use log-file rollover for deterministic validation.
