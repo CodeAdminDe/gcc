@@ -216,7 +216,7 @@ def test_runtime_auth_defaults_parsing() -> None:
             "GCC_MCP_AUTH_MODE": "oauth2",
             "GCC_MCP_OAUTH2_INTROSPECTION_URL": "https://auth.example.com/introspect",
             "GCC_MCP_OAUTH2_CLIENT_ID": "gcc-client",
-            "GCC_MCP_OAUTH2_CLIENT_SECRET": "top-secret",
+            "GCC_MCP_OAUTH2_CLIENT_SECRET": " top-secret ",
             "GCC_MCP_OAUTH2_INTROSPECTION_TIMEOUT_SECONDS": "9.5",
             "GCC_MCP_AUTH_REQUIRED_SCOPES": "gcc.read,gcc.write",
         }
@@ -232,6 +232,18 @@ def test_runtime_auth_defaults_parsing() -> None:
 def test_runtime_auth_defaults_invalid_mode() -> None:
     with pytest.raises(ValueError):
         get_runtime_auth_defaults(env={"GCC_MCP_AUTH_MODE": "jwt"})
+
+
+@pytest.mark.parametrize("timeout", ["nan", "inf", "-inf"])
+def test_runtime_auth_defaults_rejects_non_finite_timeout(timeout: str) -> None:
+    with pytest.raises(ValueError):
+        get_runtime_auth_defaults(
+            env={
+                "GCC_MCP_AUTH_MODE": "oauth2",
+                "GCC_MCP_OAUTH2_INTROSPECTION_URL": "https://auth.example.com/introspect",
+                "GCC_MCP_OAUTH2_INTROSPECTION_TIMEOUT_SECONDS": timeout,
+            }
+        )
 
 
 def test_validate_runtime_auth_values_off_mode_accepts_stdio() -> None:

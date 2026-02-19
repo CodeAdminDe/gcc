@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -100,7 +101,7 @@ def get_runtime_auth_defaults(env: Mapping[str, str] | None = None) -> RuntimeAu
         trusted_proxy_value=source.get("GCC_MCP_TRUSTED_PROXY_VALUE", "").strip(),
         oauth2_introspection_url=source.get("GCC_MCP_OAUTH2_INTROSPECTION_URL", "").strip(),
         oauth2_client_id=source.get("GCC_MCP_OAUTH2_CLIENT_ID", "").strip(),
-        oauth2_client_secret=source.get("GCC_MCP_OAUTH2_CLIENT_SECRET", ""),
+        oauth2_client_secret=source.get("GCC_MCP_OAUTH2_CLIENT_SECRET", "").strip(),
         oauth2_introspection_timeout_seconds=timeout_seconds,
         auth_issuer_url=source.get("GCC_MCP_AUTH_ISSUER_URL", "").strip(),
         auth_resource_server_url=source.get("GCC_MCP_AUTH_RESOURCE_SERVER_URL", "").strip(),
@@ -302,6 +303,8 @@ def _parse_float_env(
         parsed = float(str(raw).strip())
     except ValueError as exc:
         raise ValueError(f"{key} must be a number.") from exc
+    if not math.isfinite(parsed):
+        raise ValueError(f"{key} must be a finite number.")
     if min_value is not None and parsed < min_value:
         raise ValueError(f"{key} must be >= {min_value}.")
     return parsed
