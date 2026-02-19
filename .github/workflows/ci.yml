@@ -36,3 +36,41 @@ jobs:
 
       - name: Syntax compile check
         run: python -m py_compile src/gcc_mcp/*.py
+
+  security-scans:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install bandit pip-audit
+
+      - name: Bandit static analysis
+        run: bandit -r src/gcc_mcp -q
+
+      - name: Build dependency audit input
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tomllib
+
+          pyproject = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          dependencies = pyproject.get("project", {}).get("dependencies", [])
+          pathlib.Path(".audit-requirements.txt").write_text(
+              "\n".join(dependencies) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: pip-audit runtime dependencies
+        run: pip-audit -r .audit-requirements.txt --progress-spinner off

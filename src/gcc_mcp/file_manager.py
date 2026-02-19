@@ -14,6 +14,7 @@ class FileManager:
     """Wrapper around common text/YAML file operations."""
 
     def write_text(self, path: Path, content: str) -> None:
+        """Write UTF-8 text to a file, creating parent directories as needed."""
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
@@ -25,6 +26,7 @@ class FileManager:
             ) from exc
 
     def append_text(self, path: Path, content: str) -> None:
+        """Append UTF-8 text to a file, creating parent directories as needed."""
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as handle:
@@ -37,6 +39,7 @@ class FileManager:
             ) from exc
 
     def read_text(self, path: Path) -> str:
+        """Read UTF-8 text from a file, returning empty text when missing."""
         try:
             return path.read_text(encoding="utf-8")
         except FileNotFoundError:
@@ -49,6 +52,7 @@ class FileManager:
             ) from exc
 
     def write_yaml(self, path: Path, payload: dict[str, Any]) -> None:
+        """Write YAML content with stable key order to a file path."""
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("w", encoding="utf-8") as handle:
@@ -61,6 +65,7 @@ class FileManager:
             ) from exc
 
     def read_yaml(self, path: Path) -> dict[str, Any]:
+        """Read YAML mapping from disk, returning empty mapping on missing/invalid data."""
         if not path.exists():
             return {}
         try:

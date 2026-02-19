@@ -119,6 +119,12 @@ Checks:
 - `python -m ruff check src tests`
 - `python -m pytest -q`
 - `python -m py_compile src/gcc_mcp/*.py`
+- `bandit -r src/gcc_mcp -q`
+- `pip-audit -r .audit-requirements.txt --progress-spinner off`
+
+Security reference:
+
+- `docs/security-model.md`
 
 ## Inspector & Evaluations
 

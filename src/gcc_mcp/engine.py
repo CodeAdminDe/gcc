@@ -56,9 +56,11 @@ class GCCEngine:
     """Main service implementing GCC operations."""
 
     def __init__(self, file_manager: FileManager | None = None) -> None:
+        """Create an engine instance with filesystem operations dependency."""
         self.file_manager = file_manager or FileManager()
 
     def initialize(self, request: InitRequest) -> InitResponse:
+        """Initialize `.GCC` state for a repository directory."""
         directory = self._resolve_existing_directory(request.directory)
         gcc_dir = directory / GCC_DIR_NAME
         if gcc_dir.exists():
@@ -153,6 +155,7 @@ class GCCEngine:
         )
 
     def commit(self, request: CommitRequest) -> CommitResponse:
+        """Persist a commit-like checkpoint for the current GCC branch."""
         gcc_dir, config = self._load_gcc_state(request.directory)
         branch = str(config.get("current_branch", DEFAULT_BRANCH))
         branch_dir = self._require_branch(gcc_dir, branch)
@@ -228,23 +231,18 @@ class GCCEngine:
         )
 
     def branch(self, request: BranchRequest) -> BranchResponse:
+        """Create a new branch directory and switch active branch."""
         gcc_dir, config = self._load_gcc_state(request.directory)
-        if not BRANCH_NAME_PATTERN.match(request.name):
-            raise GCCError(
-                ErrorCode.INVALID_BRANCH_NAME,
-                f"Invalid branch name '{request.name}'",
-                "Use lowercase letters, numbers, and hyphens only.",
-            )
-
-        new_branch_dir = gcc_dir / BRANCHES_DIR_NAME / request.name
+        branch_name = self._validate_branch_name(request.name)
+        new_branch_dir = self._branch_path(gcc_dir, branch_name)
         if new_branch_dir.exists():
             raise GCCError(
                 ErrorCode.BRANCH_EXISTS,
-                f"Branch '{request.name}' already exists",
+                f"Branch '{branch_name}' already exists",
                 "Use a different branch name or delete/archive the existing branch.",
             )
 
-        parent_dir = self._require_branch(gcc_dir, request.from_branch)
+        parent_dir = self._require_branch(gcc_dir, request.from_branch, field_name="from_branch")
         timestamp = self._now_iso()
         new_branch_dir.mkdir(parents=True, exist_ok=True)
 
@@ -260,7 +258,7 @@ class GCCEngine:
             "**Type**: chore\n"
             "\n"
             "**Summary**:\n"
-            f"Created branch '{request.name}' for: {request.description}\n"
+            f"Created branch '{branch_name}' for: {request.description}\n"
             "\n"
             "**Details**:\n"
             f"- Parent branch: {request.from_branch}\n"
@@ -274,16 +272,16 @@ class GCCEngine:
 
         self.file_manager.write_text(
             new_branch_dir / COMMIT_FILE_NAME,
-            self._render_commit_header(request.name) + branch_bootstrap_note,
+            self._render_commit_header(branch_name) + branch_bootstrap_note,
         )
         self.file_manager.write_text(
             new_branch_dir / LOG_FILE_NAME,
-            self._render_log_header(request.name),
+            self._render_log_header(branch_name),
         )
         self.file_manager.write_yaml(
             new_branch_dir / METADATA_FILE_NAME,
             self._new_branch_metadata(
-                name=request.name,
+                name=branch_name,
                 parent=request.from_branch,
                 description=request.description,
                 tags=request.tags,
@@ -291,22 +289,22 @@ class GCCEngine:
             ),
         )
 
-        config["current_branch"] = request.name
+        config["current_branch"] = branch_name
         config["updated_at"] = timestamp
         self._append_activity(
             config=config,
             action="BRANCH",
-            branch=request.name,
+            branch=branch_name,
             message=f"Created from {request.from_branch}: {request.description}",
             timestamp=timestamp,
         )
         self.file_manager.write_yaml(gcc_dir / CONFIG_FILE_NAME, config)
-        self._update_main_status(gcc_dir, request.name, timestamp)
+        self._update_main_status(gcc_dir, branch_name, timestamp)
 
         return BranchResponse(
             status="success",
-            message=f"Branch '{request.name}' created",
-            branch_name=request.name,
+            message=f"Branch '{branch_name}' created",
+            branch_name=branch_name,
             branch_path=str(new_branch_dir),
             parent_branch=request.from_branch,
             created_files=[COMMIT_FILE_NAME, LOG_FILE_NAME, METADATA_FILE_NAME],
@@ -314,6 +312,7 @@ class GCCEngine:
         )
 
     def merge(self, request: MergeRequest) -> MergeResponse:
+        """Record a branch merge and update branch metadata/state."""
         gcc_dir, config = self._load_gcc_state(request.directory)
         if request.source_branch == request.target_branch:
             raise GCCError(
@@ -322,8 +321,8 @@ class GCCEngine:
                 "Pick a different target branch for merge.",
             )
 
-        source_dir = self._require_branch(gcc_dir, request.source_branch)
-        target_dir = self._require_branch(gcc_dir, request.target_branch)
+        source_dir = self._require_branch(gcc_dir, request.source_branch, field_name="source_branch")
+        target_dir = self._require_branch(gcc_dir, request.target_branch, field_name="target_branch")
 
         source_metadata_path = source_dir / METADATA_FILE_NAME
         target_metadata_path = target_dir / METADATA_FILE_NAME
@@ -408,6 +407,7 @@ class GCCEngine:
         )
 
     def get_context(self, request: ContextRequest) -> ContextResponse:
+        """Return filtered context snapshots for selected branches."""
         gcc_dir, config = self._load_gcc_state(request.directory)
         all_branch_dirs = sorted((gcc_dir / BRANCHES_DIR_NAME).iterdir(), key=lambda item: item.name)
         all_branch_names = [item.name for item in all_branch_dirs if item.is_dir()]
@@ -509,6 +509,7 @@ class GCCEngine:
         )
 
     def get_status(self, request: StatusRequest) -> StatusResponse:
+        """Return current project status and recent activity."""
         gcc_dir, config = self._load_gcc_state(request.directory)
         branches_root = gcc_dir / BRANCHES_DIR_NAME
         if not branches_root.exists():
@@ -734,12 +735,7 @@ class GCCEngine:
                 "Branch name is required",
                 "Provide a branch name.",
             )
-        if not BRANCH_NAME_PATTERN.match(branch_name):
-            raise GCCError(
-                ErrorCode.INVALID_BRANCH_NAME,
-                f"Invalid branch name '{branch_name}'",
-                "Use lowercase letters, numbers, and hyphens only.",
-            )
+        branch_name = self._validate_branch_name(branch_name)
 
         gcc_dir, config = self._load_gcc_state(directory)
         if branch_name == DEFAULT_BRANCH:
@@ -796,6 +792,7 @@ class GCCEngine:
         }
 
     def _resolve_existing_directory(self, directory: str) -> Path:
+        """Resolve and validate a repository directory path."""
         path = Path(directory).expanduser().resolve()
         if not path.exists() or not path.is_dir():
             raise GCCError(
@@ -806,6 +803,7 @@ class GCCEngine:
         return path
 
     def _load_gcc_state(self, directory: str) -> tuple[Path, dict[str, Any]]:
+        """Load `.GCC` root path and validated configuration data."""
         root = self._resolve_existing_directory(directory)
         gcc_dir = root / GCC_DIR_NAME
         if not gcc_dir.exists():
@@ -824,16 +822,55 @@ class GCCEngine:
             )
         return gcc_dir, config
 
-    def _require_branch(self, gcc_dir: Path, branch_name: str) -> Path:
-        branch_dir = gcc_dir / BRANCHES_DIR_NAME / branch_name
-        if not branch_dir.exists():
+    def _require_branch(
+        self,
+        gcc_dir: Path,
+        branch_name: str,
+        field_name: str = "branch",
+    ) -> Path:
+        """Validate branch naming/path safety and ensure branch exists."""
+        normalized_name = self._validate_branch_name(branch_name, field_name=field_name)
+        branch_dir = self._branch_path(gcc_dir, normalized_name, field_name=field_name)
+        if not branch_dir.exists() or not branch_dir.is_dir():
             raise GCCError(
                 ErrorCode.BRANCH_NOT_FOUND,
-                f"Branch '{branch_name}' does not exist",
+                f"Branch '{normalized_name}' does not exist",
                 "Create the branch first or choose an existing branch.",
-                {"branch": branch_name},
+                {"branch": normalized_name},
             )
         return branch_dir
+
+    def _branch_path(
+        self,
+        gcc_dir: Path,
+        branch_name: str,
+        field_name: str = "branch",
+    ) -> Path:
+        """Build a normalized branch path constrained to the branches root."""
+        normalized_name = self._validate_branch_name(branch_name, field_name=field_name)
+        branches_root = gcc_dir / BRANCHES_DIR_NAME
+        branches_root_resolved = branches_root.resolve()
+        branch_dir = (branches_root / normalized_name).resolve()
+        try:
+            branch_dir.relative_to(branches_root_resolved)
+        except ValueError as exc:
+            raise GCCError(
+                ErrorCode.INVALID_BRANCH_NAME,
+                f"Invalid {field_name} name '{normalized_name}'",
+                "Use lowercase letters, numbers, and hyphens only.",
+            ) from exc
+        return branch_dir
+
+    def _validate_branch_name(self, branch_name: str, field_name: str = "branch") -> str:
+        """Validate branch names against the strict lowercase-hyphen policy."""
+        name = str(branch_name).strip()
+        if not name or not BRANCH_NAME_PATTERN.fullmatch(name):
+            raise GCCError(
+                ErrorCode.INVALID_BRANCH_NAME,
+                f"Invalid {field_name} name '{branch_name}'",
+                "Use lowercase letters, numbers, and hyphens only.",
+            )
+        return name
 
     def _new_branch_metadata(
         self,
@@ -843,6 +880,7 @@ class GCCEngine:
         tags: list[str],
         timestamp: str,
     ) -> dict[str, Any]:
+        """Create initial metadata payload for a newly created branch."""
         return {
             "branch": {
                 "name": name,
@@ -866,6 +904,7 @@ class GCCEngine:
         active_branch: str,
         timestamp: str,
     ) -> str:
+        """Render initial `main.md` content for a GCC project."""
         rendered_goals = "\n".join(f"- [ ] {goal}" for goal in goals) or "- [ ] Define initial goals"
         description = project_description or "No project description provided."
         return (
@@ -890,12 +929,15 @@ class GCCEngine:
         )
 
     def _render_commit_header(self, branch_name: str) -> str:
+        """Render commit file header for a branch."""
         return f"# Commit History: {branch_name}\n\n"
 
     def _render_log_header(self, branch_name: str) -> str:
+        """Render execution log header for a branch."""
         return f"# Execution Log: {branch_name}\n\n"
 
     def _render_commit_entry(self, timestamp: str, commit_id: str, request: CommitRequest) -> str:
+        """Render a markdown commit entry."""
         details = request.details or ["No additional details provided."]
         files = request.files_modified or ["No files listed."]
         tags = request.tags or ["untagged"]
@@ -926,6 +968,7 @@ class GCCEngine:
         )
 
     def _render_log_entry(self, timestamp: str, commit_id: str, request: CommitRequest) -> str:
+        """Render an OTA-style execution log entry."""
         observation = request.ota_log.observation if request.ota_log else "No observation provided."
         thought = request.ota_log.thought if request.ota_log else "No thought provided."
         action = request.ota_log.action if request.ota_log else request.message
@@ -951,6 +994,7 @@ class GCCEngine:
         )
 
     def _update_main_status(self, gcc_dir: Path, current_branch: str, timestamp: str) -> None:
+        """Update active branch and date markers in `main.md`."""
         main_path = gcc_dir / MAIN_FILE_NAME
         current_content = self.file_manager.read_text(main_path)
         if not current_content:
@@ -975,6 +1019,7 @@ class GCCEngine:
         summary: str,
         timestamp: str,
     ) -> None:
+        """Append merge notes to `main.md` for roadmap visibility."""
         main_path = gcc_dir / MAIN_FILE_NAME
         content = self.file_manager.read_text(main_path)
         if not content:
@@ -997,6 +1042,7 @@ class GCCEngine:
         message: str,
         timestamp: str,
     ) -> None:
+        """Append a bounded activity entry to configuration history."""
         activity = config.setdefault("activity_log", [])
         activity.append(
             {
@@ -1014,6 +1060,7 @@ class GCCEngine:
         directory: Path,
         policy: GitContextPolicy,
     ) -> bool:
+        """Apply `.GCC` git-tracking policy in `.gitignore`."""
         gitignore_path = directory / ".gitignore"
         normalized_entries = {".GCC/", "/.GCC/"}
 
@@ -1044,6 +1091,7 @@ class GCCEngine:
         return updated
 
     def _coerce_bool(self, value: Any) -> bool:
+        """Parse common string/number representations into booleans."""
         if isinstance(value, bool):
             return value
         normalized = str(value).strip().lower()
@@ -1058,6 +1106,7 @@ class GCCEngine:
         )
 
     def _redact_payload(self, payload: Any) -> Any:
+        """Recursively redact potentially sensitive strings in payload data."""
         if isinstance(payload, dict):
             return {key: self._redact_payload(value) for key, value in payload.items()}
         if isinstance(payload, list):
@@ -1067,6 +1116,7 @@ class GCCEngine:
         return payload
 
     def _redact_string(self, value: str) -> str:
+        """Apply conservative string-level redaction heuristics."""
         redacted = value
         # Common key=value secret patterns.
         redacted = re.sub(
@@ -1083,12 +1133,15 @@ class GCCEngine:
         return redacted
 
     def _generate_commit_id(self) -> str:
+        """Generate a timestamp-based commit identifier."""
         return f"gcc-commit-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')}"
 
     def _now_iso(self) -> str:
+        """Return current UTC timestamp in ISO-8601 format."""
         return datetime.now(timezone.utc).isoformat()
 
     def _unique_preserve_order(self, values: list[str]) -> list[str]:
+        """Remove duplicates while preserving original order."""
         seen: set[str] = set()
         result: list[str] = []
         for value in values:
@@ -1103,6 +1156,7 @@ class GCCEngine:
         since: date | None,
         tags: list[str],
     ) -> list[dict[str, Any]]:
+        """Filter history entries by date and optional tag intersection."""
         tag_filter = {tag.lower() for tag in tags}
         filtered: list[dict[str, Any]] = []
         for entry in history:
@@ -1127,6 +1181,7 @@ class GCCEngine:
         return filtered
 
     def _parse_iso_datetime(self, value: str) -> datetime | None:
+        """Parse an ISO-8601 datetime string and normalize `Z` suffix."""
         normalized = value.replace("Z", "+00:00")
         try:
             return datetime.fromisoformat(normalized)
@@ -1134,6 +1189,7 @@ class GCCEngine:
             return None
 
     def _render_context_markdown(self, data: dict[str, Any]) -> str:
+        """Render context payload as readable markdown text."""
         lines = [
             f"Project: {data.get('project_name', '')}",
             f"Current Branch: {data.get('current_branch', DEFAULT_BRANCH)}",

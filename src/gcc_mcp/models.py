@@ -95,15 +95,15 @@ class BranchRequest(BaseModel):
     directory: str
     name: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9-]+$")
     description: str = Field(..., min_length=1, max_length=200)
-    from_branch: str = "main"
+    from_branch: str = Field(default="main", pattern=r"^[a-z0-9-]+$")
     copy_context: bool = True
     tags: list[str] = Field(default_factory=list)
 
 
 class MergeRequest(BaseModel):
     directory: str
-    source_branch: str
-    target_branch: str = "main"
+    source_branch: str = Field(..., pattern=r"^[a-z0-9-]+$")
+    target_branch: str = Field(default="main", pattern=r"^[a-z0-9-]+$")
     summary: str = Field(..., min_length=1, max_length=500)
     keep_branch: bool = False
     update_roadmap: bool = True

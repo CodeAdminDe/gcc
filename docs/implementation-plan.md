@@ -55,3 +55,18 @@
 4. Transport:
    - v0.1 default remains stdio.
    - Server now includes streamable HTTP startup path for future remote deployment.
+
+## v0.3 Security and Docs Hardening (in progress)
+
+Tracking:
+
+- Milestone: `GCC MCP v0.3 - Security and Documentation Hardening`
+- Issue: `#10 v0.3 Security+Docs hardening execution`
+
+Execution items:
+
+1. Global branch path hardening and strict branch validation.
+2. CI security scans (`bandit`, `pip-audit`).
+3. Expanded docstring coverage across core runtime modules.
+4. Regression tests for traversal and runtime validation edge cases.
+5. Security model and deployment hardening documentation.

@@ -32,8 +32,10 @@ gcc-mcp
 ## Security Considerations
 
 - `.GCC/` may contain sensitive context and should stay ignored by default.
+- Branch access is constrained by strict branch-name validation and path containment under `.GCC/branches`.
 - For remote deployments, ensure network-level controls (firewalls, private network, auth proxy).
 - Use `redaction_mode=true` where broad context access is exposed.
+- See `docs/security-model.md` for security assumptions and hardening controls.
 
 ## Production Hardening Backlog
 

@@ -329,3 +329,36 @@ def test_delete_branch_invalid_name_rejected(tmp_path: Path, engine: GCCEngine) 
             force=True,
         )
     assert "Invalid branch name" in str(exc_info.value)
+
+
+def test_branch_from_branch_validation_rejects_path_segments(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError):
+        BranchRequest(
+            directory=str(tmp_path),
+            name="feature-safe",
+            description="Attempt unsafe parent branch input",
+            from_branch="../main",
+        )
+
+
+def test_commit_rejects_tampered_current_branch_value(tmp_path: Path, engine: GCCEngine) -> None:
+    engine.initialize(
+        InitRequest(
+            directory=str(tmp_path),
+            project_name="Demo Project",
+        )
+    )
+    config_path = tmp_path / ".GCC" / ".gcc-config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["current_branch"] = "../main"
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(GCCError) as exc_info:
+        engine.commit(
+            CommitRequest(
+                directory=str(tmp_path),
+                message="Should fail with invalid branch in config",
+            )
+        )
+
+    assert exc_info.value.code.value == "INVALID_BRANCH_NAME"

@@ -70,6 +70,7 @@ def _register_tool(annotations: dict[str, bool]):
 
 
 def _error_payload_from_exception(exc: Exception) -> dict[str, Any]:
+    """Convert internal exceptions into stable MCP error payloads."""
     if isinstance(exc, GCCError):
         payload = exc.to_payload()
     elif isinstance(exc, ValidationError):
@@ -304,6 +305,7 @@ def gcc_status(
 
 
 def main() -> None:
+    """Run GCC MCP server in stdio or streamable HTTP mode."""
     parser = argparse.ArgumentParser(description="GCC MCP server")
     try:
         transport_default, host_default, port_default = get_runtime_defaults()
