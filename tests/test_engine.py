@@ -7,6 +7,7 @@ import yaml
 from pydantic import ValidationError
 
 from gcc_mcp.engine import GCCEngine
+from gcc_mcp.errors import GCCError
 from gcc_mcp.models import (
     BranchRequest,
     CommitRequest,
@@ -255,3 +256,76 @@ def test_context_and_status_outputs(tmp_path: Path, engine: GCCEngine) -> None:
     assert status.project_name == "Demo Project"
     assert status.current_branch == "main"
     assert status.active_branches == 1
+
+
+def test_context_redaction_mode(tmp_path: Path, engine: GCCEngine) -> None:
+    engine.initialize(
+        InitRequest(
+            directory=str(tmp_path),
+            project_name="Demo Project",
+        )
+    )
+    engine.commit(
+        CommitRequest(
+            directory=str(tmp_path),
+            message="Configured token=abcd1234abcd1234abcd1234",
+            notes="password=super-secret-value",
+            tags=["security"],
+        )
+    )
+
+    context = engine.get_context(
+        ContextRequest(
+            directory=str(tmp_path),
+            level="detailed",
+            format="json",
+            redact_sensitive=True,
+        )
+    )
+    assert context.status == "success"
+    assert context.redaction_applied is True
+    commits = context.data["branches"][0]["commits"]
+    assert "[REDACTED]" in commits[0]["message"] or "[REDACTED_PATH]" in commits[0]["message"]
+
+
+def test_set_config_current_branch_uses_checkout_side_effects(
+    tmp_path: Path, engine: GCCEngine
+) -> None:
+    engine.initialize(
+        InitRequest(
+            directory=str(tmp_path),
+            project_name="Demo Project",
+        )
+    )
+    engine.branch(
+        BranchRequest(
+            directory=str(tmp_path),
+            name="feature-a",
+            description="Feature branch",
+            from_branch="main",
+        )
+    )
+
+    updated = engine.set_config(str(tmp_path), "current_branch", "main")
+    assert updated["current_branch"] == "main"
+    activity = updated.get("activity_log", [])
+    assert activity
+    assert activity[-1]["action"] == "CHECKOUT"
+    assert activity[-1]["branch"] == "main"
+
+
+def test_delete_branch_invalid_name_rejected(tmp_path: Path, engine: GCCEngine) -> None:
+    engine.initialize(
+        InitRequest(
+            directory=str(tmp_path),
+            project_name="Demo Project",
+        )
+    )
+
+    with pytest.raises(GCCError) as exc_info:
+        engine.delete_branch(
+            directory=str(tmp_path),
+            branch_name="../..",
+            force=True,
+        )
+    assert "Invalid branch name" in str(exc_info.value)

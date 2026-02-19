@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date
 from typing import Any
 
 from pydantic import ValidationError
@@ -50,6 +51,7 @@ def _print_payload(payload: dict[str, Any], as_json: bool) -> None:
     for key in (
         "commit_id",
         "branch",
+        "count",
         "branch_name",
         "merged_from",
         "merged_into",
@@ -60,6 +62,34 @@ def _print_payload(payload: dict[str, Any], as_json: bool) -> None:
     ):
         if key in payload and payload[key] not in ("", None):
             print(f"{key}: {payload[key]}")
+
+    if "config" in payload and isinstance(payload["config"], dict):
+        print("config:")
+        for config_key, config_value in payload["config"].items():
+            print(f"  {config_key}: {config_value}")
+
+    if "values" in payload and isinstance(payload["values"], dict):
+        print("values:")
+        for config_key, config_value in payload["values"].items():
+            print(f"  {config_key}: {config_value}")
+
+    if "key" in payload and "value" in payload:
+        print(f"{payload['key']}: {payload.get('value')}")
+
+    if "branches" in payload:
+        for branch in payload["branches"]:
+            marker = "*" if branch.get("current") else "-"
+            print(
+                f"{marker} {branch.get('name')} [{branch.get('status')}] "
+                f"integration={branch.get('integration_status')} commits={branch.get('commit_count')}"
+            )
+
+    if "entries" in payload:
+        for entry in payload["entries"]:
+            print(
+                f"- [{entry.get('timestamp','')}] {entry.get('type','')} "
+                f"{entry.get('id','')}: {entry.get('message','')}"
+            )
 
 
 def _error_payload(exc: Exception) -> dict[str, Any]:
@@ -171,11 +201,57 @@ def _build_parser() -> argparse.ArgumentParser:
         default="markdown",
         help="Rendered context format",
     )
+    context.add_argument(
+        "--redact-sensitive",
+        action="store_true",
+        help="Redact potentially sensitive values in context output",
+    )
     context.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
     status = subparsers.add_parser("status", help="Show GCC status")
     status.add_argument("-d", "--directory", default=".", help="GCC directory")
     status.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
+    config = subparsers.add_parser("config", help="Get or set GCC config values")
+    config.add_argument("-d", "--directory", default=".", help="GCC directory")
+    config.add_argument("key", nargs="?", help="Config key")
+    config.add_argument("value", nargs="?", help="Config value to set")
+    config.add_argument("--list", action="store_true", help="List all config values")
+    config.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
+    log = subparsers.add_parser("log", help="Show commit history for a branch")
+    log.add_argument("branch", nargs="?", help="Branch name (defaults to current)")
+    log.add_argument("-d", "--directory", default=".", help="GCC directory")
+    log.add_argument("-n", "--limit", type=int, default=20, help="Limit number of commits")
+    log.add_argument("--since", default="", help="Filter since date YYYY-MM-DD")
+    log.add_argument(
+        "--type",
+        choices=["feature", "bugfix", "refactor", "test", "docs", "chore", "merge"],
+        default="",
+        help="Filter by commit type",
+    )
+    log.add_argument("--tags", default="", help="Comma-separated tags")
+    log.add_argument("--oneline", action="store_true", help="One line output format")
+    log.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
+    list_cmd = subparsers.add_parser("list", help="List branches")
+    list_cmd.add_argument("-d", "--directory", default=".", help="GCC directory")
+    list_cmd.add_argument("--active", action="store_true", help="Show only active branches")
+    list_cmd.add_argument("--archived", action="store_true", help="Show only archived branches")
+    list_cmd.add_argument("--tags", default="", help="Comma-separated tags")
+    list_cmd.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
+    checkout = subparsers.add_parser("checkout", help="Switch active GCC branch")
+    checkout.add_argument("branch", help="Branch name")
+    checkout.add_argument("-d", "--directory", default=".", help="GCC directory")
+    checkout.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
+    delete = subparsers.add_parser("delete", help="Archive or delete a GCC branch")
+    delete.add_argument("branch", help="Branch name")
+    delete.add_argument("-d", "--directory", default=".", help="GCC directory")
+    delete.add_argument("--force", action="store_true", help="Force delete branch directory")
+    delete.add_argument("--archive", action="store_true", help="Archive branch instead of deleting")
+    delete.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
     return parser
 
@@ -257,8 +333,79 @@ def main(argv: list[str] | None = None) -> int:
                     since=args.since or None,
                     tags=_csv_list(args.tags),
                     format=args.format,
+                    redact_sensitive=args.redact_sensitive,
                 )
             ).model_dump(mode="json")
+        elif args.command == "config":
+            if args.list:
+                response = {
+                    "status": "success",
+                    "message": "Config listed",
+                    "config": engine.get_config(args.directory),
+                }
+            elif args.key and args.value is not None:
+                response = {
+                    "status": "success",
+                    "message": f"Config key '{args.key}' updated",
+                    "config": engine.set_config(args.directory, args.key, args.value),
+                }
+            elif args.key:
+                config = engine.get_config(args.directory)
+                response = {
+                    "status": "success",
+                    "message": "Config value retrieved",
+                    "key": args.key,
+                    "value": config.get(args.key),
+                }
+            else:
+                raise GCCError(
+                    ErrorCode.INVALID_INPUT,
+                    "config requires --list or <key> [value]",
+                    "Use `gcc-cli config --list` or `gcc-cli config <key> [value]`.",
+                )
+        elif args.command == "log":
+            since: date | None = None
+            if args.since:
+                try:
+                    since = date.fromisoformat(args.since)
+                except ValueError as exc:
+                    raise GCCError(
+                        ErrorCode.INVALID_INPUT,
+                        "Invalid --since date format",
+                        "Use YYYY-MM-DD.",
+                    ) from exc
+            response = engine.get_log(
+                directory=args.directory,
+                branch_name=args.branch,
+                limit=args.limit,
+                since=since,
+                commit_type=args.type or None,
+                tags=_csv_list(args.tags),
+            )
+            if args.oneline and not as_json:
+                for entry in response.get("entries", []):
+                    print(
+                        f"{entry.get('id','')} "
+                        f"{entry.get('type','')} "
+                        f"{entry.get('message','')}"
+                    )
+                return 0
+        elif args.command == "list":
+            response = engine.list_branches(
+                directory=args.directory,
+                active_only=args.active,
+                archived_only=args.archived,
+                tags=_csv_list(args.tags),
+            )
+        elif args.command == "checkout":
+            response = engine.checkout_branch(args.directory, args.branch)
+        elif args.command == "delete":
+            response = engine.delete_branch(
+                directory=args.directory,
+                branch_name=args.branch,
+                force=args.force,
+                archive=args.archive,
+            )
         else:
             response = engine.get_status(StatusRequest(directory=args.directory)).model_dump(mode="json")
 
