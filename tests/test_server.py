@@ -38,3 +38,15 @@ def test_validated_runtime_defaults_explicit_empty_env_mapping(monkeypatch) -> N
     assert transport == "stdio"
     assert host == "127.0.0.1"
     assert port == 8000
+
+
+@pytest.mark.parametrize("port", ["0", "65536"])
+def test_validated_runtime_defaults_invalid_port_range(port: str) -> None:
+    with pytest.raises(ValueError):
+        get_runtime_defaults(
+            env={
+                "GCC_MCP_TRANSPORT": "stdio",
+                "GCC_MCP_HOST": "127.0.0.1",
+                "GCC_MCP_PORT": port,
+            }
+        )

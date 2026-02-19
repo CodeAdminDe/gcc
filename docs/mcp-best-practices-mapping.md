@@ -25,11 +25,11 @@ This server implementation follows official MCP guidance from:
 8. Security-aware initialization:
    - `.GCC` tracking is explicit per repo.
    - Default is `.gitignore` protection plus informed warning about sensitive context.
-9. Transport readiness:
+9. Path-safety hardening:
+   - Branch names validated with strict allow-list pattern.
+   - Branch filesystem resolution constrained to `.GCC/branches` root.
+10. Security quality gates:
+   - CI runs Bandit static analysis and pip-audit dependency checks.
+11. Transport readiness:
    - stdio default for local tooling.
    - streamable HTTP mode available behind startup flag.
-
-## Planned Follow-up
-
-- Verify and add explicit tool annotations (`readOnlyHint`, `idempotentHint`, etc.)
-  after dependency installation in the target runtime environment.
