@@ -68,6 +68,7 @@ Implemented CLI commands:
 - `list`
 - `checkout`
 - `delete`
+- `audit-verify`
 
 Example init with secure default (`.GCC` ignored by git):
 
@@ -193,6 +194,14 @@ Optional runtime guardrails:
 gcc-mcp \
   --rate-limit-per-minute 120 \
   --audit-max-field-chars 4096
+```
+
+Verify signed audit log integrity:
+
+```bash
+gcc-cli audit-verify \
+  --log-file .GCC/server-audit.jsonl \
+  --signing-key 'replace-me'
 ```
 
 ## CI Quality Gates

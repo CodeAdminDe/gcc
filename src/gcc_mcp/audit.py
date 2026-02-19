@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .errors import ErrorCode, GCCError
+
 SENSITIVE_KEY_PATTERN = re.compile(r"(?i)(password|passwd|secret|token|api[_-]?key|authorization)")
 SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
     r"(?i)\b(password|passwd|secret|token|api[_-]?key|authorization)\s*[:=]\s*([^\s,;]+)"
@@ -210,3 +212,152 @@ def _read_last_event_hash(path: Path) -> str | None:
     if isinstance(event_hash, str) and event_hash:
         return event_hash
     return None
+
+
+def verify_signed_audit_log(log_path: Path, signing_key: str) -> dict[str, Any]:
+    """Verify HMAC signatures and hash-chain continuity for a signed audit log."""
+    normalized_signing_key = signing_key.strip()
+    if not normalized_signing_key:
+        raise GCCError(
+            ErrorCode.INVALID_INPUT,
+            "Audit signing key is required for verification.",
+            "Set --signing-key or GCC_MCP_AUDIT_SIGNING_KEY.",
+        )
+
+    try:
+        handle = log_path.open("r", encoding="utf-8")
+    except OSError as exc:
+        raise GCCError(
+            ErrorCode.INVALID_INPUT,
+            f"Unable to read audit log file: {log_path}",
+            "Ensure --log-file points to an existing readable JSONL file.",
+        ) from exc
+
+    checked_entries = 0
+    previous_event_hash: str | None = None
+    with handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            checked_entries += 1
+            payload = _parse_json_line(line=line, line_number=line_number)
+            event_hash, signature, previous_hash_value = _extract_signed_event_fields(
+                payload=payload,
+                line_number=line_number,
+            )
+
+            if previous_hash_value != previous_event_hash:
+                raise GCCError(
+                    ErrorCode.INVALID_INPUT,
+                    "Audit chain verification failed.",
+                    "Check for tampering, truncation, or out-of-order log lines.",
+                    details={
+                        "line_number": line_number,
+                        "expected_prev_event_sha256": previous_event_hash,
+                        "actual_prev_event_sha256": previous_hash_value,
+                    },
+                )
+
+            canonical_payload = dict(payload)
+            canonical_payload.pop("event_sha256", None)
+            canonical_payload.pop("event_signature_hmac_sha256", None)
+            canonical_bytes = json.dumps(
+                canonical_payload,
+                ensure_ascii=True,
+                sort_keys=True,
+            ).encode("utf-8")
+
+            calculated_event_hash = hashlib.sha256(canonical_bytes).hexdigest()
+            if not hmac.compare_digest(event_hash, calculated_event_hash):
+                raise GCCError(
+                    ErrorCode.INVALID_INPUT,
+                    "Audit event hash mismatch detected.",
+                    "Check for tampering or partial writes in the audit log.",
+                    details={
+                        "line_number": line_number,
+                        "expected_event_sha256": event_hash,
+                        "calculated_event_sha256": calculated_event_hash,
+                    },
+                )
+
+            calculated_signature = hmac.new(
+                normalized_signing_key.encode("utf-8"),
+                canonical_bytes,
+                hashlib.sha256,
+            ).hexdigest()
+            if not hmac.compare_digest(signature, calculated_signature):
+                raise GCCError(
+                    ErrorCode.INVALID_INPUT,
+                    "Audit event signature verification failed.",
+                    "Use the correct signing key and verify log integrity.",
+                    details={"line_number": line_number},
+                )
+
+            previous_event_hash = event_hash
+
+    return {
+        "status": "success",
+        "message": "Signed audit log verification passed.",
+        "entries_checked": checked_entries,
+        "log_file": str(log_path),
+    }
+
+
+def _parse_json_line(line: str, line_number: int) -> dict[str, Any]:
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError as exc:
+        raise GCCError(
+            ErrorCode.INVALID_INPUT,
+            "Audit log contains malformed JSON.",
+            "Fix or remove malformed lines before verification.",
+            details={"line_number": line_number},
+        ) from exc
+
+    if isinstance(payload, dict):
+        return payload
+
+    raise GCCError(
+        ErrorCode.INVALID_INPUT,
+        "Audit log line must be a JSON object.",
+        "Ensure each audit log line is a JSON object.",
+        details={"line_number": line_number},
+    )
+
+
+def _extract_signed_event_fields(
+    payload: dict[str, Any],
+    line_number: int,
+) -> tuple[str, str, str | None]:
+    event_hash = payload.get("event_sha256")
+    if not isinstance(event_hash, str) or not event_hash:
+        raise GCCError(
+            ErrorCode.INVALID_INPUT,
+            "Missing event_sha256 in signed audit line.",
+            "Verify the log was generated with audit signing enabled.",
+            details={"line_number": line_number},
+        )
+
+    signature = payload.get("event_signature_hmac_sha256")
+    if not isinstance(signature, str) or not signature:
+        raise GCCError(
+            ErrorCode.INVALID_INPUT,
+            "Missing event signature in signed audit line.",
+            "Verify the log was generated with audit signing enabled.",
+            details={"line_number": line_number},
+        )
+
+    previous_hash_value = payload.get("prev_event_sha256")
+    if previous_hash_value is not None and (
+        not isinstance(previous_hash_value, str) or not previous_hash_value
+    ):
+        raise GCCError(
+            ErrorCode.INVALID_INPUT,
+            "Invalid prev_event_sha256 value in signed audit line.",
+            "Ensure prev_event_sha256 is either null or a non-empty string.",
+            details={"line_number": line_number},
+        )
+
+    return event_hash, signature, previous_hash_value

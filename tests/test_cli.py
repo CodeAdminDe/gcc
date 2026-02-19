@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from gcc_mcp.audit import AuditLogger
 from gcc_mcp.cli import main
 
 
@@ -243,3 +244,43 @@ def test_cli_config_non_json_output_shows_values(tmp_path: Path, capsys) -> None
     output = capsys.readouterr().out
     assert "config:" in output
     assert "project_name: CLI Project" in output
+
+
+def test_cli_audit_verify_success_and_failure(tmp_path: Path, capsys) -> None:
+    signing_key = "unit-test-signing-key"
+    log_path = tmp_path / "audit.jsonl"
+    logger = AuditLogger(log_path=log_path, redact_sensitive=False, signing_key=signing_key)
+    logger.log_tool_event(
+        tool_name="gcc_status",
+        status="success",
+        request_payload={"directory": str(tmp_path)},
+        response_payload={"status": "success"},
+    )
+
+    success = _run_cli_json(
+        [
+            "audit-verify",
+            "--log-file",
+            str(log_path),
+            "--signing-key",
+            signing_key,
+        ],
+        capsys,
+    )
+    assert success["exit_code"] == 0
+    assert success["payload"]["status"] == "success"
+    assert success["payload"]["entries_checked"] == 1
+
+    failure = _run_cli_json(
+        [
+            "audit-verify",
+            "--log-file",
+            str(log_path),
+            "--signing-key",
+            "wrong-signing-key",
+        ],
+        capsys,
+    )
+    assert failure["exit_code"] == 1
+    assert failure["payload"]["status"] == "error"
+    assert failure["payload"]["error_code"] == "INVALID_INPUT"

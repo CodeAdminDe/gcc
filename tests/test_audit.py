@@ -5,7 +5,10 @@ import hmac
 import json
 from pathlib import Path
 
-from gcc_mcp.audit import AuditLogger
+import pytest
+
+from gcc_mcp.audit import AuditLogger, verify_signed_audit_log
+from gcc_mcp.errors import GCCError
 
 
 def test_audit_logger_disabled_writes_nothing(tmp_path: Path) -> None:
@@ -249,3 +252,53 @@ def test_audit_logger_recovers_last_hash_from_large_existing_log(tmp_path: Path)
 
     last_event = json.loads(log_path.read_text(encoding="utf-8").splitlines()[-1])
     assert last_event["prev_event_sha256"] == f"{299:064x}"
+
+
+def test_verify_signed_audit_log_success(tmp_path: Path) -> None:
+    log_path = tmp_path / "audit.jsonl"
+    signing_key = "unit-test-signing-key"
+    logger = AuditLogger(log_path=log_path, redact_sensitive=False, signing_key=signing_key)
+    logger.log_tool_event(
+        tool_name="gcc_status",
+        status="success",
+        request_payload={"directory": str(tmp_path)},
+        response_payload={"status": "success"},
+    )
+    logger.log_tool_event(
+        tool_name="gcc_context",
+        status="success",
+        request_payload={"level": "summary"},
+        response_payload={"status": "success"},
+    )
+
+    result = verify_signed_audit_log(log_path=log_path, signing_key=signing_key)
+    assert result["status"] == "success"
+    assert result["entries_checked"] == 2
+
+
+def test_verify_signed_audit_log_detects_tampering(tmp_path: Path) -> None:
+    log_path = tmp_path / "audit.jsonl"
+    signing_key = "unit-test-signing-key"
+    logger = AuditLogger(log_path=log_path, redact_sensitive=False, signing_key=signing_key)
+    logger.log_tool_event(
+        tool_name="gcc_status",
+        status="success",
+        request_payload={"message": "original"},
+        response_payload={"status": "success"},
+    )
+
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    payload = json.loads(lines[0])
+    payload["request"]["message"] = "tampered"
+    log_path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(GCCError):
+        verify_signed_audit_log(log_path=log_path, signing_key=signing_key)
+
+
+def test_verify_signed_audit_log_rejects_invalid_signing_key_input(tmp_path: Path) -> None:
+    with pytest.raises(GCCError):
+        verify_signed_audit_log(
+            log_path=tmp_path / "audit.jsonl",
+            signing_key="  ",
+        )

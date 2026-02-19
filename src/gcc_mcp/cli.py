@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
+from .audit import verify_signed_audit_log
 from .engine import GCCEngine
 from .errors import ErrorCode, GCCError
 from .models import (
@@ -253,6 +256,22 @@ def _build_parser() -> argparse.ArgumentParser:
     delete.add_argument("--archive", action="store_true", help="Archive branch instead of deleting")
     delete.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
+    audit_verify = subparsers.add_parser(
+        "audit-verify",
+        help="Verify signed GCC audit log integrity",
+    )
+    audit_verify.add_argument(
+        "--log-file",
+        required=True,
+        help="Path to JSONL audit log file",
+    )
+    audit_verify.add_argument(
+        "--signing-key",
+        default=os.environ.get("GCC_MCP_AUDIT_SIGNING_KEY", ""),
+        help="HMAC signing key used to sign audit events (default: env var).",
+    )
+    audit_verify.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
     return parser
 
 
@@ -405,6 +424,11 @@ def main(argv: list[str] | None = None) -> int:
                 branch_name=args.branch,
                 force=args.force,
                 archive=args.archive,
+            )
+        elif args.command == "audit-verify":
+            response = verify_signed_audit_log(
+                log_path=Path(args.log_file),
+                signing_key=str(args.signing_key),
             )
         else:
             response = engine.get_status(StatusRequest(directory=args.directory)).model_dump(mode="json")
