@@ -27,3 +27,14 @@ def test_validated_runtime_defaults_invalid_port(monkeypatch) -> None:
     monkeypatch.setenv("GCC_MCP_PORT", "not-a-number")
     with pytest.raises(ValueError):
         get_runtime_defaults()
+
+
+def test_validated_runtime_defaults_explicit_empty_env_mapping(monkeypatch) -> None:
+    monkeypatch.setenv("GCC_MCP_TRANSPORT", "streamable-http")
+    monkeypatch.setenv("GCC_MCP_HOST", "10.0.0.1")
+    monkeypatch.setenv("GCC_MCP_PORT", "9090")
+
+    transport, host, port = get_runtime_defaults(env={})
+    assert transport == "stdio"
+    assert host == "127.0.0.1"
+    assert port == 8000

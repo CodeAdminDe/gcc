@@ -57,9 +57,14 @@ def _register_tool(annotations: dict[str, bool]):
     def decorator(func):
         try:
             return mcp.tool(annotations=annotations)(func)
-        except TypeError:
-            logger.debug("FastMCP tool annotations not supported in this SDK version; using fallback.")
-            return mcp.tool()(func)
+        except TypeError as exc:
+            message = str(exc).lower()
+            if "annotations" in message or "unexpected keyword argument" in message:
+                logger.debug(
+                    "FastMCP tool annotations not supported in this SDK version; using fallback."
+                )
+                return mcp.tool()(func)
+            raise
 
     return decorator
 

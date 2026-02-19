@@ -734,6 +734,12 @@ class GCCEngine:
                 "Branch name is required",
                 "Provide a branch name.",
             )
+        if not BRANCH_NAME_PATTERN.match(branch_name):
+            raise GCCError(
+                ErrorCode.INVALID_BRANCH_NAME,
+                f"Invalid branch name '{branch_name}'",
+                "Use lowercase letters, numbers, and hyphens only.",
+            )
 
         gcc_dir, config = self._load_gcc_state(directory)
         if branch_name == DEFAULT_BRANCH:

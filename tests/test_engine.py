@@ -7,6 +7,7 @@ import yaml
 from pydantic import ValidationError
 
 from gcc_mcp.engine import GCCEngine
+from gcc_mcp.errors import GCCError
 from gcc_mcp.models import (
     BranchRequest,
     CommitRequest,
@@ -311,3 +312,20 @@ def test_set_config_current_branch_uses_checkout_side_effects(
     assert activity
     assert activity[-1]["action"] == "CHECKOUT"
     assert activity[-1]["branch"] == "main"
+
+
+def test_delete_branch_invalid_name_rejected(tmp_path: Path, engine: GCCEngine) -> None:
+    engine.initialize(
+        InitRequest(
+            directory=str(tmp_path),
+            project_name="Demo Project",
+        )
+    )
+
+    with pytest.raises(GCCError) as exc_info:
+        engine.delete_branch(
+            directory=str(tmp_path),
+            branch_name="../..",
+            force=True,
+        )
+    assert "Invalid branch name" in str(exc_info.value)

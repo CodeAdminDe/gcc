@@ -8,7 +8,7 @@ from collections.abc import Mapping
 
 def get_runtime_defaults(env: Mapping[str, str] | None = None) -> tuple[str, str, int]:
     """Validate and return runtime defaults from environment variables."""
-    source = env or os.environ
+    source = os.environ if env is None else env
 
     transport_default = source.get("GCC_MCP_TRANSPORT", "stdio")
     allowed_transports = {"stdio", "streamable-http"}
