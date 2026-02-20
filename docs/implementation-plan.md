@@ -229,14 +229,14 @@ Delivered items:
 2. Publish operator-facing production readiness checklist and rollout/rollback guidance.
 3. Keep plan/best-practice mapping aligned with release-quality and delivery state.
 
-## v1.5 Runtime Preflight and Startup Diagnostics (in progress)
+## v1.5 Runtime Preflight and Startup Diagnostics (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v1.5 - Runtime Preflight and Startup Diagnostics`
 - Issue: `#34 v1.5 Execution: runtime preflight and startup diagnostics`
 
-Execution items:
+Delivered items:
 
 1. Add server preflight mode (`--check-config`) to validate runtime settings and exit.
 2. Add sanitized effective runtime configuration output (`--print-effective-config`).
