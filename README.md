@@ -234,11 +234,15 @@ Checks:
 - `python -m py_compile src/gcc_mcp/*.py`
 - `bandit -r src/gcc_mcp -q`
 - `pip-audit -r .audit-requirements.txt --progress-spinner off`
+- `python -m build`
+- `twine check dist/*`
+- wheel-install smoke (`gcc-cli --help`, `gcc-mcp --help`, `python -m gcc_mcp --help`)
 
 Security reference:
 
 - `docs/security-model.md`
 - `docs/audit-verification-runbook.md`
+- `docs/production-readiness-checklist.md`
 
 ## Inspector & Evaluations
 

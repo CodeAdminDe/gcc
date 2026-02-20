@@ -57,3 +57,6 @@ This server implementation follows official MCP guidance from:
    - Regression tests cover optional-parameter fallback behavior.
 21. CI compatibility verification:
    - CI validates against both default-resolved and minimum-supported MCP SDK versions.
+22. Distribution and release validation:
+   - CI builds wheel/sdist artifacts and validates metadata before merge.
+   - Fresh-install smoke checks verify CLI and server entrypoints from built artifacts.
