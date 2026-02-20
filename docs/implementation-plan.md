@@ -56,14 +56,14 @@
    - v0.1 default remains stdio.
    - Server now includes streamable HTTP startup path for future remote deployment.
 
-## v0.3 Security and Docs Hardening (in progress)
+## v0.3 Security and Docs Hardening (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v0.3 - Security and Documentation Hardening`
 - Issue: `#10 v0.3 Security+Docs hardening execution`
 
-Execution items:
+Delivered items:
 
 1. Global branch path hardening and strict branch validation.
 2. CI security scans (`bandit`, `pip-audit`).
@@ -71,14 +71,14 @@ Execution items:
 4. Regression tests for traversal and runtime validation edge cases.
 5. Security model and deployment hardening documentation.
 
-## v0.4 Remote Hardening and Auditing (in progress)
+## v0.4 Remote Hardening and Auditing (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v0.4 - Remote Transport Hardening and Auditing`
 - Issue: `#12 v0.4 Remote hardening + audit logging execution`
 
-Execution items:
+Delivered items:
 
 1. Public streamable HTTP binding guard with explicit operator opt-in.
 2. Structured MCP tool-call audit logs (JSONL) with sensitive-field redaction.
@@ -86,14 +86,14 @@ Execution items:
 4. Regression tests for host exposure and audit/runtime edge cases.
 5. Deployment/security docs updates for remote operations.
 
-## v0.5 Operational Guardrails and Limits (in progress)
+## v0.5 Operational Guardrails and Limits (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v0.5 - Operational Guardrails and Limits`
 - Issue: `#14 v0.5 Operational guardrails execution (rate limits + audit caps)`
 
-Execution items:
+Delivered items:
 
 1. Optional per-process MCP tool-call rate limiting.
 2. Audit payload field-size truncation for safer log volume bounds.
@@ -101,14 +101,14 @@ Execution items:
 4. Regression tests for limiter behavior and runtime/audit edge cases.
 5. Deployment/security docs updates for operational controls.
 
-## v0.6 Remote AuthN/AuthZ and Deployment Profiles (in progress)
+## v0.6 Remote AuthN/AuthZ and Deployment Profiles (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v0.6 - Remote AuthN/AuthZ and Deployment Profiles`
 - Issue: `#16 v0.6 Execution: remote authn/authz + deployment profiles (Envoy)`
 
-Execution items:
+Delivered items:
 
 1. Runtime auth mode framework (`off`, `token`, `trusted-proxy-header`, `oauth2`).
 2. FastMCP auth wiring for static token and OAuth2 introspection verification.
@@ -117,14 +117,14 @@ Execution items:
 5. Deployment/security docs updates with Envoy-based remote profile guidance.
 6. Regression tests for auth runtime parsing/validation and URL resolution.
 
-## v0.7 Policy Enforcement and Signed Audit Trails (in progress)
+## v0.7 Policy Enforcement and Signed Audit Trails (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v0.7 - Policy Enforcement and Signed Audit Trails`
 - Issue: `#18 v0.7 Execution: strict policy + signed audit trails`
 
-Execution items:
+Delivered items:
 
 1. Runtime security profile framework (`baseline`, `strict`).
 2. Strict-profile validation for remote operation (auth required; audit required; signing required).
@@ -133,14 +133,14 @@ Execution items:
 5. Regression tests for security-policy and signed-audit behavior.
 6. Deployment/security docs updates for strict profile rollout.
 
-## v0.8 Audit Verification and Key Lifecycle Controls (in progress)
+## v0.8 Audit Verification and Key Lifecycle Controls (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v0.8 - Audit Verification and Key Lifecycle Controls`
 - Issue: `#20 v0.8 Execution: audit verification + key lifecycle controls`
 
-Execution items:
+Delivered items:
 
 1. Signed audit verification utility and CLI command.
 2. Deterministic failure diagnostics for hash/signature/chain mismatches.
@@ -163,42 +163,68 @@ Delivered items:
 4. Backward-compatible mixed legacy/key-id verification behavior.
 5. Regression tests and docs updates for rotation rollout and verification workflows.
 
-## v1.0 MCP Tool Surface Completeness and Parity (in progress)
+## v1.0 MCP Tool Surface Completeness and Parity (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v1.0 - MCP Tool Surface Completeness and Parity`
 - Issue: `#24 v1.0 Execution: MCP tool-surface completeness and parity`
 
-Execution items:
+Delivered items:
 
 1. Expand MCP tool surface for branch operations, config operations, and history/list read paths.
 2. Keep stable error contract and runtime guardrails across expanded tool set.
 3. Add regression tests for new tool flows and edge cases.
 4. Refresh docs/mapping/evaluation artifacts after tool expansion.
 
-## v1.1 SDK Compatibility and CI Resilience (in progress)
+## v1.1 SDK Compatibility and CI Resilience (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v1.1 - SDK Compatibility and CI Resilience`
 - Issue: `#26 v1.1 Execution: SDK compatibility hardening and constructor regression tests`
 
-Execution items:
+Delivered items:
 
 1. Harden FastMCP constructor compatibility across supported SDK versions.
 2. Add deterministic tests for optional-kwarg fallback and error propagation.
 3. Keep docs/tracking aligned with compatibility policy decisions.
 
-## v1.2 CI SDK Version Matrix Hardening (in progress)
+## v1.2 CI SDK Version Matrix Hardening (completed)
 
 Tracking:
 
 - Milestone: `GCC MCP v1.2 - CI SDK Version Matrix Hardening`
 - Issue: `#28 v1.2 Execution: CI matrix for MCP SDK compatibility`
 
-Execution items:
+Delivered items:
 
 1. Add MCP SDK version matrix coverage in CI (minimum supported + default/latest resolved).
 2. Preserve existing lint/test/compile gates across matrix entries.
 3. Keep runtime cost controlled with representative SDK-version coverage.
+
+## v1.3 Tool Registration Compatibility Hardening (completed)
+
+Tracking:
+
+- Milestone: `GCC MCP v1.3 - Tool Registration Compatibility Hardening`
+- Issue: `#30 v1.3 Execution: tighten tool annotation fallback and add regressions`
+
+Delivered items:
+
+1. Hardened FastMCP tool-registration compatibility for legacy annotation handling behavior.
+2. Added regression coverage for non-class annotation fallback and unrelated TypeError propagation.
+3. Closed delivery via PR #29 merge and reconciled superseded stacked branch/PR state.
+
+## v1.4 Production Readiness and Release Gates (in progress)
+
+Tracking:
+
+- Milestone: `GCC MCP v1.4 - Production Readiness and Release Gates`
+- Issue: `#32 v1.4 Execution: production readiness and release gates`
+
+Execution items:
+
+1. Add distribution build/install smoke checks to CI for release gating.
+2. Publish operator-facing production readiness checklist and rollout/rollback guidance.
+3. Keep plan/best-practice mapping aligned with release-quality and delivery state.
