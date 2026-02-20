@@ -35,6 +35,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Resolve release metadata
         id: metadata
         env:
@@ -69,9 +74,14 @@ jobs:
 
           pyproject_text = git_show(target_sha, "pyproject.toml")
           pyproject = tomllib.loads(pyproject_text)
-          version = str(pyproject["project"]["version"]).strip()
+          project = pyproject.get("project")
+          if not isinstance(project, dict):
+              raise SystemExit("pyproject.toml missing [project] table.")
+          if "version" not in project:
+              raise SystemExit("pyproject.toml missing [project].version.")
+          version = str(project.get("version", "")).strip()
           if not version:
-              raise SystemExit("Project version is empty in pyproject.toml.")
+              raise SystemExit("pyproject.toml [project].version must be non-empty.")
           tag = f"v{version}"
 
           changelog = git_show(target_sha, "CHANGELOG.md")
@@ -107,17 +117,30 @@ jobs:
               output.write(f"notes_path={notes_path}\n")
           PY
 
-      - name: Skip if release tag already exists
+      - name: Check if GitHub release already exists
         id: tag_check
+        uses: actions/github-script@v7
         env:
           TAG: ${{ steps.metadata.outputs.tag }}
-        run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag ${TAG} already exists; skipping release creation."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
+        with:
+          script: |
+            const tag = process.env.TAG;
+            try {
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              core.notice(`Release ${tag} already exists.`);
+              core.setOutput("exists", "true");
+            } catch (error) {
+              if (error.status === 404) {
+                core.notice(`Release ${tag} does not exist yet.`);
+                core.setOutput("exists", "false");
+              } else {
+                throw error;
+              }
+            }
 
       - name: Create GitHub release (creates tag)
         if: steps.tag_check.outputs.exists != 'true'
@@ -159,4 +182,3 @@ jobs:
               });
               core.notice(`Created release ${tag} for ${targetSha}.`);
             }
-
