@@ -55,10 +55,22 @@ jobs:
           from pathlib import Path
 
           def git_show(commit_sha: str, path: str) -> str:
-              return subprocess.check_output(
-                  ["git", "show", f"{commit_sha}:{path}"],
-                  text=True,
-              )
+              try:
+                  return subprocess.check_output(
+                      ["git", "show", f"{commit_sha}:{path}"],
+                      text=True,
+                      stderr=subprocess.STDOUT,
+                  )
+              except subprocess.CalledProcessError as exc:
+                  output = (exc.output or "").strip()
+                  detail = output or str(exc)
+                  raise SystemExit(
+                      f"Unable to read '{path}' at commit '{commit_sha}': {detail}"
+                  ) from exc
+              except Exception as exc:  # noqa: BLE001
+                  raise SystemExit(
+                      f"Unable to read '{path}' at commit '{commit_sha}': {exc}"
+                  ) from exc
 
           event_name = os.environ.get("EVENT_NAME", "").strip()
           dispatch_sha = os.environ.get("DISPATCH_TARGET_SHA", "").strip()
