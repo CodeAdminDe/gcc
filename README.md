@@ -88,7 +88,6 @@ Available files:
 ### Local container quick start
 
 ```bash
-mkdir -p workspace
 docker compose up --build -d
 docker compose logs -f
 ```
@@ -97,22 +96,32 @@ Endpoint:
 
 - `http://127.0.0.1:8000/mcp`
 
+`docker-compose.yml` uses a named volume for `/workspace` by default so writes work with the
+container user (`uid 10001`) without host-permission adjustments.
+If you switch to a bind mount (for example `./workspace:/workspace`), ensure host permissions
+allow writes for uid `10001` (for example `chown -R 10001:10001 workspace`).
+
 ### Production-style compose quick start
 
 ```bash
 mkdir -p secrets
 openssl rand -hex 32 > secrets/audit-signing.key
 chmod 600 secrets/audit-signing.key
+cp .env.example .env
+# optional: edit .env for auth mode/scopes and runtime tuning
 
 export GCC_MCP_AUTH_TOKEN='replace-me'
+./scripts/check-container-prereqs.sh
 docker compose -f docker-compose.prod.yml up -d
 ```
 
 Notes:
 
 - Production compose runs with `security-profile=strict`.
-- It expects `GCC_MCP_AUTH_TOKEN` and `secrets/audit-signing.key`.
+- It expects `GCC_MCP_AUTH_TOKEN` and `./secrets/audit-signing.key`.
 - Port mapping defaults to loopback only: `127.0.0.1:8000:8000`.
+- `GCC_MCP_ALLOW_PUBLIC_HTTP=true` is set for container-internal `0.0.0.0` binding;
+  exposure remains host-loopback and should stay behind a TLS reverse proxy (Envoy/nginx/Traefik).
 
 ### Containerized test run
 
@@ -303,7 +312,7 @@ Continuous integration: `.github/workflows/ci.yml`
 - lint, tests, compile checks
 - security scans (`bandit`, `pip-audit`)
 - packaging checks (`build`, `twine`, wheel smoke)
-- container test/build checks and GHCR image publishing (`docker-build-push.yml`)
+- container test/build checks, signed GHCR publishing (main/tags), and nightly image builds (`docker-build-push.yml`)
 
 Release automation: `.github/workflows/release.yml`
 

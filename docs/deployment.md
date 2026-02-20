@@ -105,7 +105,6 @@ Container artifacts are available for development, production-style runtime, and
 ### Local development (Docker Compose)
 
 ```bash
-mkdir -p workspace
 docker compose up --build -d
 docker compose logs -f
 ```
@@ -120,6 +119,10 @@ The dev compose profile starts `gcc-mcp` with:
 - `--host 0.0.0.0`
 - `--port 8000`
 - `--allow-public-http`
+- named volume mount for `/workspace` (avoids uid/gid mismatch with container user `10001`)
+
+If you intentionally replace the named volume with `./workspace:/workspace`, ensure the host path
+is writable by uid `10001` before startup.
 
 ### Production-style Compose Baseline
 
@@ -141,13 +144,16 @@ openssl rand -hex 32 > secrets/audit-signing.key
 chmod 600 secrets/audit-signing.key
 cp .env.example .env
 export GCC_MCP_AUTH_TOKEN='replace-me'
+./scripts/check-container-prereqs.sh
 docker compose -f docker-compose.prod.yml up -d
 ```
 
 Recommended:
 
-- Place Envoy in front for TLS termination and ingress policy.
+- Place Envoy (or nginx/Traefik) in front for TLS termination and ingress policy.
 - Keep `GCC_MCP_AUTH_TOKEN` and audit signing keys outside git and rotate regularly.
+- Production compose keeps host publishing loopback-only (`127.0.0.1:8000:8000`) and should remain behind a TLS reverse proxy.
+- `GCC_MCP_ALLOW_PUBLIC_HTTP=true` is set intentionally in production compose because container-internal binding uses `0.0.0.0`; access control is enforced by loopback host publish and reverse proxy boundary.
 
 ### Containerized Test Stage
 
@@ -170,8 +176,9 @@ Workflow: `.github/workflows/docker-build-push.yml`
 Behavior:
 
 - Pull requests: build + run container test target + runtime smoke checks (no push)
-- Push to `main`, `emdai/**`, and version tags: build and publish runtime image to GHCR
-- Multi-arch publish for `linux/amd64` and `linux/arm64`
+- Push to `main` and version tags: build and publish runtime image to GHCR
+- Scheduled nightly build: publish `nightly` image tag
+- Multi-arch publish for `linux/amd64`, `linux/arm64`, and `linux/arm/v7`
 
 ## Envoy Reverse-Proxy Profile
 

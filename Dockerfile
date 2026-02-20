@@ -56,7 +56,7 @@ USER gcc:gcc
 EXPOSE 8000
 
 ENTRYPOINT ["gcc-mcp"]
-CMD ["--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000", "--allow-public-http"]
+CMD ["--transport", "streamable-http", "--host", "127.0.0.1", "--port", "8000"]
 
 # ===========================
 # Test Stage

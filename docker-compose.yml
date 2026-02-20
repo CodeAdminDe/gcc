@@ -18,9 +18,9 @@ services:
       PYTHONUNBUFFERED: "1"
       GCC_MCP_AUDIT_REDACT: "true"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
-      - ./workspace:/workspace
+      - gcc-dev-workspace:/workspace
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -36,3 +36,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+volumes:
+  gcc-dev-workspace:

@@ -6,12 +6,15 @@ services:
       - --transport
       - streamable-http
       - --host
+      # Container-internal binding; exposure is controlled by host loopback publish below.
       - 0.0.0.0
       - --port
       - "8000"
-      - --allow-public-http
     environment:
       PYTHONUNBUFFERED: "1"
+      # Required because container listens on 0.0.0.0 internally.
+      # Exposure remains loopback-only via `127.0.0.1:8000:8000` below.
+      GCC_MCP_ALLOW_PUBLIC_HTTP: "true"
       GCC_MCP_SECURITY_PROFILE: strict
       GCC_MCP_AUTH_MODE: ${GCC_MCP_AUTH_MODE:-token}
       GCC_MCP_AUTH_TOKEN: ${GCC_MCP_AUTH_TOKEN:?set GCC_MCP_AUTH_TOKEN in environment or .env}
@@ -23,6 +26,7 @@ services:
       GCC_MCP_RATE_LIMIT_PER_MINUTE: ${GCC_MCP_RATE_LIMIT_PER_MINUTE:-120}
       GCC_MCP_AUDIT_MAX_FIELD_CHARS: ${GCC_MCP_AUDIT_MAX_FIELD_CHARS:-4000}
     ports:
+      # Keep direct MCP HTTP local-only; terminate TLS and publish externally via reverse proxy.
       - "127.0.0.1:8000:8000"
     volumes:
       - gcc-workspace:/workspace
