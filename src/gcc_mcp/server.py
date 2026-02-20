@@ -122,7 +122,10 @@ def _register_tool(annotations: dict[str, bool]):
             return mcp.tool(annotations=annotations)(func)
         except TypeError as exc:
             message = str(exc).lower()
-            if "annotations" in message or "unexpected keyword argument" in message:
+            if (
+                "annotations" in message
+                and "unexpected keyword argument" in message
+            ):
                 logger.debug(
                     "FastMCP tool annotations not supported in this SDK version; using fallback."
                 )

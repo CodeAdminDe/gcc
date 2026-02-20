@@ -57,3 +57,6 @@ This server implementation follows official MCP guidance from:
    - Regression tests cover optional-parameter fallback behavior.
 21. CI compatibility verification:
    - CI validates against both default-resolved and minimum-supported MCP SDK versions.
+22. Safe compatibility fallback behavior:
+   - Tool-registration fallback is constrained to annotation keyword incompatibility.
+   - Unrelated runtime/type errors are surfaced instead of being masked.

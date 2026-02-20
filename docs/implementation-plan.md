@@ -202,3 +202,16 @@ Execution items:
 1. Add MCP SDK version matrix coverage in CI (minimum supported + default/latest resolved).
 2. Preserve existing lint/test/compile gates across matrix entries.
 3. Keep runtime cost controlled with representative SDK-version coverage.
+
+## v1.3 Tool Registration Compatibility Hardening (in progress)
+
+Tracking:
+
+- Milestone: `GCC MCP v1.3 - Tool Registration Compatibility Hardening`
+- Issue: `#30 v1.3 Execution: tighten tool annotation fallback and add regressions`
+
+Execution items:
+
+1. Tighten `_register_tool` fallback matching to annotation-incompatibility errors only.
+2. Add regression coverage for supported, fallback, and unrelated-error paths.
+3. Keep compatibility logic explicit and maintainable for future SDK updates.
