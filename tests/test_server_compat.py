@@ -153,3 +153,20 @@ def test_register_tool_re_raises_unrelated_type_errors(monkeypatch) -> None:
 
     with pytest.raises(TypeError, match="boom"):
         server._register_tool(server.WRITE_TOOL_ANNOTATIONS)(_sample)
+
+
+def test_coerce_function_annotations_fallback_resolves_string_annotations() -> None:
+    def _sample(values=None):
+        return {"values": values}
+
+    _sample.__annotations__ = {
+        "values": "list[str] | None",
+        "return": "dict[str, object]",
+        "broken": "UnknownSymbol",
+    }
+
+    resolved = server._coerce_function_annotations_for_legacy_fastmcp(_sample)
+
+    assert resolved["values"] is list
+    assert resolved["return"] is dict
+    assert resolved["broken"] is object

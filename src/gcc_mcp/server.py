@@ -159,7 +159,26 @@ def _coerce_function_annotations_for_legacy_fastmcp(
     try:
         resolved = get_type_hints(func, globalns=func.__globals__, include_extras=True)
     except Exception:  # noqa: BLE001
-        resolved = dict(getattr(func, "__annotations__", {}))
+        raw_annotations = dict(getattr(func, "__annotations__", {}))
+        resolved: dict[str, Any] = {}
+        for name, annotation in raw_annotations.items():
+            if not isinstance(annotation, str):
+                resolved[name] = annotation
+                continue
+
+            # Resolve each string annotation independently so one invalid symbol
+            # does not block coercion of other annotations.
+            def _probe() -> None:
+                return None
+
+            _probe.__annotations__ = {"value": annotation}
+            try:
+                resolved_value = get_type_hints(
+                    _probe, globalns=func.__globals__, include_extras=True
+                ).get("value", annotation)
+            except Exception:  # noqa: BLE001
+                resolved_value = annotation
+            resolved[name] = resolved_value
 
     return {
         name: _coerce_annotation_to_runtime_class(annotation)
