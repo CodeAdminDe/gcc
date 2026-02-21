@@ -374,3 +374,106 @@ def test_cli_audit_verify_rejects_invalid_signing_keyring_file(tmp_path: Path, c
     assert result["exit_code"] == 1
     assert result["payload"]["status"] == "error"
     assert result["payload"]["error_code"] == "INVALID_INPUT"
+
+
+def test_cli_scaffold_skill_creates_codex_template(tmp_path: Path, capsys) -> None:
+    result = _run_cli_json(
+        [
+            "scaffold",
+            "skill",
+            "--directory",
+            str(tmp_path),
+            "--template",
+            "codex",
+        ],
+        capsys,
+    )
+    assert result["exit_code"] == 0
+    assert result["payload"]["status"] == "success"
+    assert result["payload"]["template"] == "codex"
+    assert result["payload"]["overwritten"] is False
+
+    skill_path = tmp_path / "SKILL.md"
+    assert skill_path.exists()
+    content = skill_path.read_text(encoding="utf-8")
+    assert "Context Skill" in content
+    assert "Codex sessions" in content
+
+
+def test_cli_scaffold_skill_rejects_existing_without_force(tmp_path: Path, capsys) -> None:
+    skill_path = tmp_path / "SKILL.md"
+    skill_path.write_text("existing content\n", encoding="utf-8")
+
+    result = _run_cli_json(
+        [
+            "scaffold",
+            "skill",
+            "--directory",
+            str(tmp_path),
+        ],
+        capsys,
+    )
+    assert result["exit_code"] == 1
+    assert result["payload"]["status"] == "error"
+    assert result["payload"]["error_code"] == "INVALID_INPUT"
+
+
+def test_cli_scaffold_skill_force_overwrites_with_generic_template(
+    tmp_path: Path, capsys
+) -> None:
+    skill_path = tmp_path / "SKILL.md"
+    skill_path.write_text("old\n", encoding="utf-8")
+
+    result = _run_cli_json(
+        [
+            "scaffold",
+            "skill",
+            "--directory",
+            str(tmp_path),
+            "--template",
+            "generic",
+            "--force",
+        ],
+        capsys,
+    )
+    assert result["exit_code"] == 0
+    assert result["payload"]["status"] == "success"
+    assert result["payload"]["template"] == "generic"
+    assert result["payload"]["overwritten"] is True
+
+    content = skill_path.read_text(encoding="utf-8")
+    assert "Agent Memory Skill" in content
+    assert "Codex sessions" not in content
+
+
+def test_cli_scaffold_skill_uses_init_metadata_when_available(tmp_path: Path, capsys) -> None:
+    init_result = _run_cli_json(
+        [
+            "init",
+            "--directory",
+            str(tmp_path),
+            "--name",
+            "Memory Project",
+            "--description",
+            "Capture durable preferences.",
+        ],
+        capsys,
+    )
+    assert init_result["exit_code"] == 0
+
+    result = _run_cli_json(
+        [
+            "scaffold",
+            "skill",
+            "--directory",
+            str(tmp_path),
+            "--template",
+            "generic",
+        ],
+        capsys,
+    )
+    assert result["exit_code"] == 0
+
+    content = (tmp_path / "SKILL.md").read_text(encoding="utf-8")
+    assert "# Memory Project Agent Memory Skill" in content
+    assert "Capture durable preferences." in content

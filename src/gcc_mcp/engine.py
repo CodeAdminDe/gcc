@@ -50,6 +50,7 @@ REDACTION_NOTICE = (
     "Context data may include sensitive content. Enable redaction with "
     "context.redact_sensitive=true or set config redaction_mode=true."
 )
+SKILL_TEMPLATE_CHOICES = {"codex", "generic"}
 
 
 class GCCEngine:
@@ -791,6 +792,49 @@ class GCCEngine:
             "mode": "force-delete" if force else "archive",
         }
 
+    def scaffold_skill(
+        self,
+        directory: str,
+        template: str = "codex",
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Create a SKILL.md scaffold in the target directory."""
+        target_directory = self._resolve_existing_directory(directory)
+        normalized_template = str(template).strip().lower()
+        if normalized_template not in SKILL_TEMPLATE_CHOICES:
+            choices = ", ".join(sorted(SKILL_TEMPLATE_CHOICES))
+            raise GCCError(
+                ErrorCode.INVALID_INPUT,
+                f"Unsupported skill template '{template}'",
+                f"Use one of: {choices}.",
+            )
+
+        skill_path = target_directory / "SKILL.md"
+        existed = skill_path.exists()
+        if existed and not force:
+            raise GCCError(
+                ErrorCode.INVALID_INPUT,
+                f"SKILL.md already exists in {target_directory}",
+                "Use --force to overwrite or edit the existing SKILL.md file.",
+            )
+
+        project_name, project_description = self._resolve_scaffold_project_metadata(target_directory)
+        rendered = self._render_skill_template(
+            template=normalized_template,
+            project_name=project_name,
+            project_description=project_description,
+        )
+        self.file_manager.write_text(skill_path, rendered)
+
+        action = "overwritten" if existed else "created"
+        return {
+            "status": "success",
+            "message": f"SKILL.md {action} using '{normalized_template}' template",
+            "path": str(skill_path),
+            "template": normalized_template,
+            "overwritten": existed,
+        }
+
     def _resolve_existing_directory(self, directory: str) -> Path:
         """Resolve and validate a repository directory path."""
         path = Path(directory).expanduser().resolve()
@@ -801,6 +845,24 @@ class GCCEngine:
                 "Provide an existing directory path.",
             )
         return path
+
+    def _resolve_scaffold_project_metadata(self, directory: Path) -> tuple[str, str]:
+        """Load project metadata for SKILL.md scaffolding."""
+        fallback_name = directory.name or "project"
+        project_name = fallback_name
+        project_description = ""
+
+        config_path = directory / GCC_DIR_NAME / CONFIG_FILE_NAME
+        if config_path.exists():
+            config = self.file_manager.read_yaml(config_path)
+            configured_name = str(config.get("project_name", "")).strip()
+            configured_description = str(config.get("project_description", "")).strip()
+            if configured_name:
+                project_name = configured_name
+            if configured_description:
+                project_description = configured_description
+
+        return project_name, project_description
 
     def _load_gcc_state(self, directory: str) -> tuple[Path, dict[str, Any]]:
         """Load `.GCC` root path and validated configuration data."""
@@ -871,6 +933,74 @@ class GCCEngine:
                 "Use lowercase letters, numbers, and hyphens only.",
             )
         return name
+
+    def _slugify_skill_name(self, value: str) -> str:
+        """Convert arbitrary project names into skill-friendly slugs."""
+        slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+        if not slug:
+            return "project-context"
+        return slug[:64].strip("-") or "project-context"
+
+    def _render_skill_template(
+        self,
+        template: str,
+        project_name: str,
+        project_description: str,
+    ) -> str:
+        """Render SKILL.md scaffolds for supported template variants."""
+        skill_slug = self._slugify_skill_name(project_name)
+        summary = project_description or "No project description provided."
+
+        if template == "codex":
+            return (
+                f"---\n"
+                f"name: {skill_slug}-context\n"
+                "description: Use this skill to capture and retrieve durable project context "
+                "with GCC across Codex sessions.\n"
+                "---\n\n"
+                f"# {project_name} Context Skill\n\n"
+                "## Project Summary\n\n"
+                f"{summary}\n\n"
+                "## Trigger Conditions\n\n"
+                "- start or resume work in this project\n"
+                "- record meaningful milestone/decision changes\n"
+                "- store user preferences (coding style, review style, communication style)\n"
+                "- compare strategies via branches and merge the chosen approach\n\n"
+                "## Memory Workflow\n\n"
+                "1. Restore context: `gcc-cli context --level summary`\n"
+                "2. If needed, create branch: `gcc-cli branch ...`\n"
+                "3. Checkpoint meaningful progress: `gcc-cli commit ...`\n"
+                "4. Persist preference/style updates with `tags=preferences,...`\n"
+                "5. End sessions with a concise commit containing next actions and risks\n\n"
+                "## Retrieval Hints\n\n"
+                "- use `scope`, `since`, and `tags` filters for focused recalls\n"
+                "- query `level=detailed` when milestone summaries are required\n"
+                "- query `level=full` only when deep OTA traces are necessary\n"
+            )
+
+        return (
+            f"---\n"
+            f"name: {skill_slug}-memory\n"
+            "description: Structured memory workflow for long-running AI-agent tasks using "
+            "Git Context Controller.\n"
+            "---\n\n"
+            f"# {project_name} Agent Memory Skill\n\n"
+            "## Project Summary\n\n"
+            f"{summary}\n\n"
+            "## Purpose\n\n"
+            "Use GCC to preserve durable context between sessions, including key milestones,\n"
+            "decisions, and user preferences.\n\n"
+            "## Standard Flow\n\n"
+            "1. Restore context (`status`/`context`)\n"
+            "2. Branch when evaluating alternatives\n"
+            "3. Commit meaningful outcomes\n"
+            "4. Merge successful branches\n"
+            "5. Capture user preference updates explicitly with tags\n\n"
+            "## Notes\n\n"
+            "- keep entries concise, decision-oriented, and searchable\n"
+            "- avoid logging secrets in plain text\n"
+            "- keep `.GCC` git-tracking policy explicit per repository\n"
+        )
 
     def _new_branch_metadata(
         self,
