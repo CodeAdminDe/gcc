@@ -49,6 +49,9 @@ _**Note**: For remote deployments, place `gcc-mcp` behind Envoy and enforce TLS 
 
 ## Installation
 
+Complete install matrix (local source, Docker-only, compose):
+`docs/installation.md`
+
 ### Local development install
 
 ```bash
@@ -299,6 +302,7 @@ Full configuration and deployment examples: `docs/deployment.md`
 
 ## Documentation Index
 
+- `docs/installation.md`
 - `docs/onboarding.md`
 - `docs/deployment.md`
 - `docs/security-model.md`
