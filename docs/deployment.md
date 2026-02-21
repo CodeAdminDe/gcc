@@ -178,7 +178,7 @@ Behavior:
 - Pull requests: build + run container test target + runtime smoke checks (no push)
 - Push to `main` and version tags: build and publish runtime image to GHCR
 - Scheduled nightly build: publish `nightly` image tag
-- Multi-arch publish for `linux/amd64`, `linux/arm64`, and `linux/arm/v7`
+- Multi-arch publish for `linux/amd64` and `linux/arm64`
 
 ## Envoy Reverse-Proxy Profile
 
