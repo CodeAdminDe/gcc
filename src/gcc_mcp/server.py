@@ -50,6 +50,7 @@ from .runtime import (
     validate_runtime_operation_values,
     validate_streamable_http_binding,
 )
+from .validation import build_validation_error_details
 
 logger = logging.getLogger(__name__)
 
@@ -251,17 +252,16 @@ def _error_payload_from_exception(exc: Exception) -> dict[str, Any]:
     if isinstance(exc, GCCError):
         payload = exc.to_payload()
     elif isinstance(exc, ValidationError):
-        errors: Any
-        try:
-            errors = exc.errors(include_context=False, include_input=False)
-        except TypeError:
-            errors = exc.errors()
+        validation_details = build_validation_error_details(exc)
+        suggestion = "Check field constraints and request schema."
+        if validation_details.get("hints"):
+            suggestion = "Check details.hints for schema conversion guidance and retry."
         payload = {
             "status": "error",
             "error_code": ErrorCode.INVALID_INPUT.value,
             "message": "Input validation failed",
-            "suggestion": "Check field constraints and request schema.",
-            "details": {"errors": errors},
+            "suggestion": suggestion,
+            "details": validation_details,
         }
     else:
         logger.exception("Unhandled server exception", exc_info=exc)
@@ -388,18 +388,36 @@ def gcc_commit(
     ] = "feature",
     details: Annotated[
         list[str] | None,
-        Field(description="Key achievements completed in this checkpoint"),
+        Field(
+            description=(
+                "Key achievements completed in this checkpoint (list[str]). "
+                "Example: ['Added parser', 'Added tests']."
+            )
+        ),
     ] = None,
     files_modified: Annotated[
         list[str] | None,
-        Field(description="Files modified for this checkpoint"),
+        Field(
+            description=(
+                "Files modified for this checkpoint (list[str]). "
+                "Example: ['src/gcc_mcp/server.py']."
+            )
+        ),
     ] = None,
     tests_passed: Annotated[bool, Field(description="Whether tests passed")] = True,
     notes: Annotated[str, Field(description="Additional notes for the checkpoint")] = "",
-    tags: Annotated[list[str] | None, Field(description="Tags for categorization")] = None,
+    tags: Annotated[
+        list[str] | None,
+        Field(description="Tags for categorization (list[str]). Example: ['mcp', 'docs']."),
+    ] = None,
     ota_log: Annotated[
         dict[str, str] | None,
-        Field(description="Observation-Thought-Action-Result details"),
+        Field(
+            description=(
+                "Observation-Thought-Action-Result details (dict[str, str]). "
+                "Example: {'observation':'...','thought':'...','action':'...','result':'...'}."
+            )
+        ),
     ] = None,
 ) -> dict[str, Any]:
     """Checkpoint meaningful progress and store milestone details."""
@@ -447,7 +465,15 @@ def gcc_branch(
     description: Annotated[str, Field(min_length=1, max_length=200, description="Branch purpose")],
     from_branch: Annotated[str, Field(description="Parent branch")] = "main",
     copy_context: Annotated[bool, Field(description="Copy parent branch context")] = True,
-    tags: Annotated[list[str] | None, Field(description="Tags for branch categorization")] = None,
+    tags: Annotated[
+        list[str] | None,
+        Field(
+            description=(
+                "Tags for branch categorization (list[str]). "
+                "Example: ['mcp', 'api']."
+            )
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """Create a branch to explore an alternative strategy."""
     request_payload = {
@@ -515,7 +541,12 @@ def gcc_context(
     ] = "summary",
     scope: Annotated[
         list[str] | None,
-        Field(description="Branch names to include in context output"),
+        Field(
+            description=(
+                "Branch names to include in context output (list[str]). "
+                "Example: ['main', 'feature-a']."
+            )
+        ),
     ] = None,
     since: Annotated[
         str | None,

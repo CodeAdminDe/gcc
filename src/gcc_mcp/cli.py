@@ -24,6 +24,7 @@ from .models import (
     StatusRequest,
 )
 from .runtime import resolve_audit_signing_key
+from .validation import build_validation_error_details
 
 engine = GCCEngine()
 
@@ -150,17 +151,16 @@ def _error_payload(exc: Exception) -> dict[str, Any]:
     if isinstance(exc, GCCError):
         return exc.to_payload()
     if isinstance(exc, ValidationError):
-        errors: Any
-        try:
-            errors = exc.errors(include_context=False, include_input=False)
-        except TypeError:
-            errors = exc.errors()
+        validation_details = build_validation_error_details(exc)
+        suggestion = "Check command arguments and constraints."
+        if validation_details.get("hints"):
+            suggestion = "Check details.hints for schema conversion guidance and retry."
         return {
             "status": "error",
             "error_code": ErrorCode.INVALID_INPUT.value,
             "message": "Input validation failed",
-            "suggestion": "Check command arguments and constraints.",
-            "details": {"errors": errors},
+            "suggestion": suggestion,
+            "details": validation_details,
         }
     return {
         "status": "error",
