@@ -202,6 +202,52 @@ gcc-cli status
 - `delete`
 - `audit-verify`
 
+## MCP Payload Shape Examples
+
+For MCP tool calls, pass JSON-typed values that match schema contracts.
+
+`gcc_commit` list/dict fields:
+
+```json
+{
+  "directory": "/workspace/repos/repo-a",
+  "message": "Checkpoint progress",
+  "commit_type": "feature",
+  "details": ["Added parser", "Added tests"],
+  "files_modified": ["src/gcc_mcp/server.py", "tests/test_server_tools.py"],
+  "tags": ["mcp", "docs"],
+  "ota_log": {
+    "observation": "Validation errors repeated on wrong payload shapes.",
+    "thought": "Need explicit list/dict examples and better hints.",
+    "action": "Added examples and validation guidance.",
+    "result": "Calls succeed with schema-aligned payloads."
+  }
+}
+```
+
+`gcc_branch.tags` is `list[str]`:
+
+```json
+{
+  "directory": "/workspace/repos/repo-a",
+  "name": "schema-contracts",
+  "description": "Document and validate payload contracts",
+  "tags": ["mcp", "api"]
+}
+```
+
+`gcc_context.scope` is `list[str]`:
+
+```json
+{
+  "directory": "/workspace/repos/repo-a",
+  "level": "detailed",
+  "scope": ["main", "schema-contracts"],
+  "tags": ["mcp"],
+  "format": "markdown"
+}
+```
+
 ## Transport, Auth, and Security Profiles
 
 `stdio` is the default and recommended mode for local MCP integrations.
