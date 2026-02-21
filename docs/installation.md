@@ -157,10 +157,22 @@ Use ASCII quotes in shell commands. Typographic quotes can break token/env parsi
 
 ## Post-install Checks
 
+Choose the check commands that match how you run `gcc-mcp`.
+
+Local-source runtime:
+
 ```bash
 gcc-mcp --check-config
 gcc-mcp --print-effective-config
 gcc-cli audit-verify --log-file .GCC/server-audit.jsonl --signing-key-file .secrets/audit-signing.key
+```
+
+Docker runtime:
+
+```bash
+docker exec gcc-mcp gcc-mcp --check-config
+docker exec gcc-mcp gcc-mcp --print-effective-config
+docker exec gcc-mcp gcc-cli audit-verify --log-file /var/log/gcc/server-audit.jsonl --signing-key-file /run/secrets/audit_signing_key
 ```
 
 For onboarding actual repositories after install, see `docs/onboarding.md`.
