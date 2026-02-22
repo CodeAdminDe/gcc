@@ -423,6 +423,9 @@ def test_resolve_directory_relative_path_returns_client_cwd_guidance(tmp_path: P
     assert exc_info.value.details["failure_reason"] == "relative_path_runtime_cwd"
     assert exc_info.value.details["relative_input"] is True
     assert isinstance(exc_info.value.details["existing_suggestions"], list)
+    assert exc_info.value.details["directory_requested"] == "."
+    assert exc_info.value.details["directory_resolved"] is None
+    assert "requested_directory" in exc_info.value.details
     assert "client cwd" in (exc_info.value.suggestion or "").lower()
 
 
@@ -443,6 +446,9 @@ def test_resolve_directory_invalid_error_includes_existing_suggestions(tmp_path:
 
     assert exc_info.value.code.value == "INVALID_DIRECTORY"
     assert exc_info.value.details["failure_reason"] == "outside_allowed_roots"
+    assert exc_info.value.details["directory_requested"] == str(host_worktrees / "missing-worktree")
+    assert exc_info.value.details["directory_resolved"] is None
+    assert "requested_directory" in exc_info.value.details
     suggestions = exc_info.value.details["existing_suggestions"]
     assert suggestions
     assert suggestions[0]["path"] == str(runtime_repo_root.resolve())

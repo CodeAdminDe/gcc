@@ -143,6 +143,9 @@ def test_server_status_relative_path_returns_client_cwd_guidance(
     assert response["status"] == "error"
     assert response["error_code"] == "INVALID_DIRECTORY"
     assert response["details"]["failure_reason"] == "relative_path_runtime_cwd"
+    assert response["details"]["directory_requested"] == "."
+    assert response["details"]["directory_resolved"] is None
+    assert "requested_directory" in response["details"]
     assert isinstance(response["details"]["existing_suggestions"], list)
     assert "client cwd" in response["suggestion"].lower()
 

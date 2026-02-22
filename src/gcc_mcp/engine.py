@@ -862,6 +862,13 @@ class GCCEngine:
         relative_input = self._is_relative_directory_input(raw_directory)
         candidates, mapped_candidate_present = self._build_directory_candidates(requested)
         blocked_paths: list[Path] = []
+        details: dict[str, Any] = {
+            "directory_requested": str(raw_directory),
+            "directory_resolved": None,
+            "requested_directory": str(requested),
+            "candidate_paths": [str(path) for path in candidates],
+            "existing_suggestions": [],
+        }
 
         for candidate in candidates:
             if not candidate.exists() or not candidate.is_dir():
@@ -869,16 +876,13 @@ class GCCEngine:
             if self._allowed_roots and not self._is_allowed_directory(candidate):
                 blocked_paths.append(candidate)
                 continue
+            details["directory_resolved"] = str(candidate)
             return requested, candidate
 
-        details: dict[str, Any] = {
-            "requested_directory": str(requested),
-            "candidate_paths": [str(path) for path in candidates],
-            "existing_suggestions": self._build_existing_directory_suggestions(
-                candidates=candidates,
-                blocked_paths=blocked_paths,
-            ),
-        }
+        details["existing_suggestions"] = self._build_existing_directory_suggestions(
+            candidates=candidates,
+            blocked_paths=blocked_paths,
+        )
         if relative_input:
             details["relative_input"] = True
             details["runtime_cwd"] = str(Path.cwd().resolve(strict=False))
