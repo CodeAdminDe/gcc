@@ -114,6 +114,9 @@ def _print_payload(payload: dict[str, Any], as_json: bool) -> None:
         "project_name",
         "git_context_policy",
         "security_notice",
+        "template",
+        "path",
+        "overwritten",
     ):
         if key in payload and payload[key] not in ("", None):
             print(f"{key}: {payload[key]}")
@@ -307,6 +310,30 @@ def _build_parser() -> argparse.ArgumentParser:
     delete.add_argument("--archive", action="store_true", help="Archive branch instead of deleting")
     delete.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
+    scaffold = subparsers.add_parser(
+        "scaffold",
+        help="Generate optional helper files",
+    )
+    scaffold_subparsers = scaffold.add_subparsers(dest="scaffold_command", required=True)
+
+    scaffold_skill = scaffold_subparsers.add_parser(
+        "skill",
+        help="Create SKILL.md scaffold template",
+    )
+    scaffold_skill.add_argument("-d", "--directory", default=".", help="Target repository directory")
+    scaffold_skill.add_argument(
+        "--template",
+        choices=["codex", "generic"],
+        default="codex",
+        help="SKILL.md template profile",
+    )
+    scaffold_skill.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing SKILL.md when present",
+    )
+    scaffold_skill.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
     audit_verify = subparsers.add_parser(
         "audit-verify",
         help="Verify signed GCC audit log integrity",
@@ -486,6 +513,19 @@ def main(argv: list[str] | None = None) -> int:
                 force=args.force,
                 archive=args.archive,
             )
+        elif args.command == "scaffold":
+            if args.scaffold_command == "skill":
+                response = engine.scaffold_skill(
+                    directory=args.directory,
+                    template=args.template,
+                    force=args.force,
+                )
+            else:
+                raise GCCError(
+                    ErrorCode.INVALID_INPUT,
+                    f"Unsupported scaffold target '{args.scaffold_command}'",
+                    "Use `gcc-cli scaffold skill`.",
+                )
         elif args.command == "audit-verify":
             try:
                 signing_key = resolve_audit_signing_key(

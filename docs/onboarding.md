@@ -123,6 +123,9 @@ gcc-cli init \
   --name "Repo A" \
   --description "Context-tracked implementation"
 
+# optional: scaffold memory-oriented SKILL.md for agent usage
+gcc-cli scaffold skill --directory "$REPO_A" --template codex
+
 gcc-cli status -d "$REPO_A"
 gcc-cli commit -d "$REPO_A" -m "Bootstrap GCC context"
 ```
@@ -141,6 +144,14 @@ docker run --rm \
   --directory /workspace/repos/repo-a \
   --name "Repo A" \
   --description "Context-tracked implementation"
+
+# optional: scaffold memory-oriented SKILL.md for agent usage
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  -v "$HOME/gcc-repos:/workspace/repos" \
+  --entrypoint gcc-cli \
+  ghcr.io/codeadminde/gcc:latest \
+  scaffold skill --directory /workspace/repos/repo-a --template codex
 
 docker run --rm \
   --user "$(id -u):$(id -g)" \

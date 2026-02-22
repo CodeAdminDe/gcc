@@ -193,6 +193,7 @@ gcc-cli status
 ## Implemented CLI Commands
 
 - `init`
+- `scaffold`
 - `commit`
 - `branch`
 - `merge`
@@ -204,6 +205,21 @@ gcc-cli status
 - `checkout`
 - `delete`
 - `audit-verify`
+
+### Optional: Scaffold `SKILL.md` Templates
+
+Create a memory-oriented `SKILL.md` in any repository (opt-in, no overwrite by default):
+
+```bash
+# Codex-oriented template
+gcc-cli scaffold skill --directory /path/to/repo --template codex
+
+# Generic template
+gcc-cli scaffold skill --directory /path/to/repo --template generic
+
+# Overwrite existing SKILL.md if needed
+gcc-cli scaffold skill --directory /path/to/repo --template codex --force
+```
 
 ## MCP Payload Shape Examples
 
