@@ -35,6 +35,9 @@ Use stdio mode and point to:
    - `git_context_policy=track` fails without risk acknowledgement.
 3. Validate context filters:
    - `level`, `scope`, `since`, `tags`, `format` operate as expected.
+   - `tags` filtering applies to commit-entry tags for selected branches.
+   - merge records on `main` are untagged by default; `scope=["main"]` plus feature tags
+     can legitimately return no matches.
 4. Validate redaction:
    - `redact_sensitive=true` returns redacted payloads.
 5. Validate error contract:
@@ -58,6 +61,12 @@ If `list_mcp_resources(server="gcc")` returns an empty list:
    - `gcc_init` on a temporary directory, then
    - `gcc_status` against that same directory.
 4. If tool calls fail, inspect auth/path configuration (`GCC_MCP_AUTH_*`, `GCC_MCP_PATH_MAP`, `GCC_MCP_ALLOWED_ROOTS`).
+
+If `gcc_context` with `scope=["main"]` and `tags=[...]` returns no branches after a merge:
+
+1. Query again with source branch included in scope (for example `scope=["main","feature-x"]`).
+2. Confirm whether `main` has an explicit tagged commit for the same tag.
+3. Treat empty `main`-only results as expected when only merged branch commits carried that tag.
 
 ## Scripted smoke harness
 
