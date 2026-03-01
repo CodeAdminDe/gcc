@@ -41,6 +41,24 @@ Use stdio mode and point to:
    - all failures contain `status`, `error_code`, `message`, `suggestion`, `details`.
    - timeout-classified failures include `error_code=TIMEOUT` and `correlation_id`.
 
+## Resource-vs-Tool Discovery Notes
+
+- MCP resources and MCP tools are separate capability surfaces.
+- An empty resource listing does **not** imply the `gcc` server is unavailable.
+- For `gcc-mcp`, tool availability is the primary operational signal.
+
+## Troubleshooting
+
+If `list_mcp_resources(server=\"gcc\")` returns an empty list:
+
+1. Verify the server is reachable and tools are visible in Inspector.
+2. Perform a direct tool ping instead of relying on resource listing:
+   - call `gcc_status` with a known GCC-enabled directory.
+3. If no GCC-enabled directory is available yet, run:
+   - `gcc_init` on a temporary directory, then
+   - `gcc_status` against that same directory.
+4. If tool calls fail, inspect auth/path configuration (`GCC_MCP_AUTH_*`, `GCC_MCP_PATH_MAP`, `GCC_MCP_ALLOWED_ROOTS`).
+
 ## Scripted smoke harness
 
 Use:
