@@ -49,7 +49,7 @@ Use stdio mode and point to:
 
 ## Troubleshooting
 
-If `list_mcp_resources(server=\"gcc\")` returns an empty list:
+If `list_mcp_resources(server="gcc")` returns an empty list:
 
 1. Verify the server is reachable and tools are visible in Inspector.
 2. Perform a direct tool ping instead of relying on resource listing:
