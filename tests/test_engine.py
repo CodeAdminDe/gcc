@@ -288,6 +288,76 @@ def test_context_redaction_mode(tmp_path: Path, engine: GCCEngine) -> None:
     assert "[REDACTED]" in commits[0]["message"] or "[REDACTED_PATH]" in commits[0]["message"]
 
 
+def test_context_tag_filter_on_main_excludes_merged_branch_tags_without_main_tagged_commit(
+    tmp_path: Path,
+    engine: GCCEngine,
+) -> None:
+    engine.initialize(
+        InitRequest(
+            directory=str(tmp_path),
+            project_name="Demo Project",
+        )
+    )
+    engine.branch(
+        BranchRequest(
+            directory=str(tmp_path),
+            name="feature-oauth2-scope",
+            description="Implement OAuth2 scope model",
+        )
+    )
+    engine.commit(
+        CommitRequest(
+            directory=str(tmp_path),
+            message="Add OAuth2 repo-scope claim checks",
+            tags=["oauth2", "repo-scope"],
+        )
+    )
+    engine.merge(
+        MergeRequest(
+            directory=str(tmp_path),
+            source_branch="feature-oauth2-scope",
+            target_branch="main",
+            summary="Merge OAuth2 scope behavior",
+        )
+    )
+
+    filtered_main = engine.get_context(
+        ContextRequest(
+            directory=str(tmp_path),
+            level="detailed",
+            scope=["main"],
+            tags=["oauth2"],
+            format="json",
+        )
+    )
+    assert filtered_main.status == "success"
+    assert filtered_main.data["summary"]["returned_branches"] == 0
+    assert filtered_main.data["branches"] == []
+
+    engine.commit(
+        CommitRequest(
+            directory=str(tmp_path),
+            message="Document OAuth2 merge rollout on main",
+            commit_type="docs",
+            tags=["oauth2"],
+        )
+    )
+    filtered_main_after_tagged_commit = engine.get_context(
+        ContextRequest(
+            directory=str(tmp_path),
+            level="detailed",
+            scope=["main"],
+            tags=["oauth2"],
+            format="json",
+        )
+    )
+    assert filtered_main_after_tagged_commit.status == "success"
+    assert filtered_main_after_tagged_commit.data["summary"]["returned_branches"] == 1
+    commits = filtered_main_after_tagged_commit.data["branches"][0]["commits"]
+    assert len(commits) == 1
+    assert commits[0]["message"] == "Document OAuth2 merge rollout on main"
+
+
 def test_set_config_current_branch_uses_checkout_side_effects(
     tmp_path: Path, engine: GCCEngine
 ) -> None:

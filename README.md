@@ -271,6 +271,14 @@ For MCP tool calls, pass JSON-typed values that match schema contracts.
 }
 ```
 
+Tag filter semantics after merges:
+
+- `gcc_context.tags` filters by commit-entry tags within each selected branch history.
+- A merge entry recorded on `main` is untagged by default, so filtering `scope=["main"]`
+  by feature-branch tags can return no matches.
+- To discover tagged commits from merged work, query the source branch explicitly in
+  `scope` or add a tagged commit on `main`.
+
 ## Transport, Auth, and Security Profiles
 
 `stdio` is the default and recommended mode for local MCP integrations.
