@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.1.2 - 2026-03-01
+
+Patch release based on `main`, focused on containerized operations, runtime path
+resolution hardening, and post-release usability/documentation improvements.
+
+### Added
+
+- Container-first deployment assets and CI workflow updates:
+  - runtime/test Docker targets
+  - compose profiles and production preflight checks
+  - GHCR build/publish automation refinements
+- `gcc-cli scaffold skill` support for `codex` and `generic` templates.
+- Host-to-runtime path translation controls:
+  - `GCC_MCP_PATH_MAP`
+  - `GCC_MCP_ALLOWED_ROOTS`
+- Timeout diagnostics with request correlation metadata and phase-level logging.
+
+### Changed
+
+- Directory resolution now reports both requested and resolved path contract fields in
+  error details, while preserving backward-compatible metadata keys.
+- Mapped directory handling now includes bounded ancestor fallback and clearer relative-path guidance.
+- Onboarding and installation documentation now explicitly distinguishes local vs container path behavior.
+
+### Fixed
+
+- MCP discoverability guidance now clarifies that an empty resources list does not imply
+  unavailable tools; troubleshooting now includes direct tool ping validation.
+- Context tag-filter semantics after merges are documented and regression-tested:
+  `scope=[\"main\"]` only returns entries with tags present on `main` history entries.
+
 ## v0.1.1 - 2026-02-20
 
 First public release of `gcc-mcp`, including the complete implementation history delivered from
